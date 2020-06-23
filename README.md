@@ -31,6 +31,19 @@ This addon is intended for OpenNebula 5.x+
 
 TBA
 
+The Eternus requires a working, reliable multipath setup.
+Look out timeouts (no mpath)
+```
+[6012868.647650]  connection1:0: detected conn error (1020)
+
+```
+
+or incorrect setup
+```
+[7316736.333286] sd 11:0:0:0: Warning! Received an indication that the LUN assignments on this target have changed. The Linux SCSI layer does not automatical
+```
+
+
 ## Limitations
 
 Sharing of volumes (i.e. for a HA cluster) does not match well with the 
