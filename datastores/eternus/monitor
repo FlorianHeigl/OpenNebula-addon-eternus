@@ -3,6 +3,8 @@
 ###############################################################################
 # This script is used to monitor the free and used space of a datastore
 ###############################################################################
+# for Fujitsu Eternus DX series
+# <fhe@deepthink.ag>
 
 # -------- Set up the environment to source common tools & conf ------------
 
