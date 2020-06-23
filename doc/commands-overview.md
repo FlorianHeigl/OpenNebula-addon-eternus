@@ -25,14 +25,14 @@ http://docs.ts.fujitsu.com/dl.aspx?id=d50e9f72-a69d-4602-9140-321f91e0f31d
 Thin Pro             Disk         RAID     Status             Total       Provisioned         Used        Used      Warn-  Atten-  Encryp- Chunk
 No. Name             Attribute    Level                       Capacity    Capacity    Rate(%) Capacity    Status    ing(%) tion(%) tion    Size(MB)
 --- ---------------- ------------ -------- ------------------ ----------- ----------- ------- ----------- --------- ------ ------- ------- --------
-  0 VMGRP-1            Online       RAID1+0  Available          38.44 TB    58.01 TB        151 606.58 GB   Normal        90       - Disable       21
+  0 RAIDGRP-1            Online       RAID1+0  Available          38.44 TB    58.01 TB        151 606.58 GB   Normal        90       - Disable       21
 ```
 
 
 ### volume: create
 
 ```
-CLI> create volume -pool-name VMGRP-1 -type tpv -size 10gb -name one-1         
+CLI> create volume -pool-name RAIDGRP-1 -type tpv -size 10gb -name one-1         
 ```
 
 * runtime ca. 2s
@@ -45,10 +45,10 @@ CLI> show volumes
 Volume                                 Status                    Type              RG or TPP or FTRP     Size(MB)  Copy
 No.   Name                                                                         No.  Name                       Protection
 ----- -------------------------------- ------------------------- ----------------- ---- ---------------- --------- ----------
-    0 ForeignVol1                         Available                 TPV                  0 VMGRP-1             39845888 Disable    
-    1 ForeignVol2                         Available                 TPV                  0 VMGRP-1             20971520 Disable    
-    2 dt-test-001                      Available                 TPV                  0 VMGRP-1                10240 Disable    
-    3 one-1                            Available                 TPV                  0 VMGRP-1                10240 Disable  
+    0 ForeignVol1                         Available                 TPV                  0 RAIDGRP-1             39845888 Disable    
+    1 ForeignVol2                         Available                 TPV                  0 RAIDGRP-1             20971520 Disable    
+    2 dt-test-001                      Available                 TPV                  0 RAIDGRP-1                10240 Disable    
+    3 one-1                            Available                 TPV                  0 RAIDGRP-1                10240 Disable  
 ```
 
 * runtime less than 1s
@@ -116,11 +116,11 @@ CLI> show volumes
 Volume                                 Status                    Type              RG or TPP or FTRP     Size(MB)  Copy
 No.   Name                                                                         No.  Name                       Protection
 ----- -------------------------------- ------------------------- ----------------- ---- ---------------- --------- ----------
-    0 ForeignVol1                         Available                 TPV                  0 VMGRP-1             39845888 Disable    
-    1 ForeignVol2                         Available                 TPV                  0 VMGRP-1             20971520 Disable    
-    2 dt-test-001                      Available                 TPV                  0 VMGRP-1                10240 Disable    
-    3 one-3                            Available                 TPV                  0 VMGRP-1                10240 Disable    
-    4 one-2                            Available                 TPV                  0 VMGRP-1                10240 Disable    
+    0 ForeignVol1                         Available                 TPV                  0 RAIDGRP-1             39845888 Disable    
+    1 ForeignVol2                         Available                 TPV                  0 RAIDGRP-1             20971520 Disable    
+    2 dt-test-001                      Available                 TPV                  0 RAIDGRP-1                10240 Disable    
+    3 one-3                            Available                 TPV                  0 RAIDGRP-1                10240 Disable    
+    4 one-2                            Available                 TPV                  0 RAIDGRP-1                10240 Disable    
 
 CLI> show lun-groups -lg-name lg-dt-test                        
 LUN Group No.             [2]
