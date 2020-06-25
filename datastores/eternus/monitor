@@ -32,10 +32,12 @@ while IFS= read -r -d '' element; do
     XPATH_ELEMENTS[i++]="$element"
 done < <($XPATH     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/BRIDGE_LIST   \
                     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/ARRAY_NAME    \
+                    /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/ARRAY_POOL_NAME    \
                     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/ARRAY_MGMTIP)
 # ARRAY_NAME name of the eternus storage under THIS datastore
 # ARRAY_MGMTIP management ip address of the eternus storage under THIS datastore
-# we assume only one raid group per array, we assume one initiator group
+# ARRAY_POOL_NAME the thin provisioning pool to use for this LUN
+# we assume one initiator group
 # the driver does not handle any group operation, you need already
 # attached and multipathed storage connectivity
 
@@ -43,6 +45,7 @@ unset i
 
 BRIDGE_LIST="${XPATH_ELEMENTS[i++]}"
 ARRAY_NAME="${XPATH_ELEMENTS[i++]}"
+ARRAY_POOL_NAME="${XPATH_ELEMENTS[i++]}"
 ARRAY_MGMTIP="${XPATH_ELEMENTS[i++]}"
 
 HOST=$( get_destination_host )
@@ -58,7 +61,7 @@ fi
 # this catches the following line:
 #   0 RG-1            Online       RAID1+0  Available          38.44 TB    58.03 TB        151 610.62 GB   Normal        90       - Disable       21
 MONITOR_SCRIPT=$(cat <<EOF
-    TP_USAGE="$( ssh "${ARRAY_MGMTIP}" "show thin-pro-pools" 2>&1 | grep -E '(^Thin|^No|^[ 0-9])' | tail -1 )"
+    TP_USAGE="$( ssh "${ARRAY_MGMTIP}" "show thin-pro-pools" 2>&1 | grep -E '(^Thin|^No)' | grep "${ARRAY_POOL_NAME}" )"
     echo "\${TP_USAGE}"
 EOF
 )
