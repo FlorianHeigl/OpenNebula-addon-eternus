@@ -27,7 +27,7 @@ FLOCK_TIMEOUT=600
 FLOCK_LOCKFILE="/var/lock/one/.eternus.lock"
 
 # flock file descriptor for eternus_lock function
-FLOCK_FD=200
+FLOCK_FD=204
 
 # Use ddpt instead of dd to speed up data transferts using sparse copy
 USE_DDPT=1
