@@ -51,6 +51,20 @@ No.   Name                                                                      
     3 one-1                            Available                 TPV                  0 RAIDGRP-1                10240 Disable  
 ```
 
+#### csv
+
+```
+CLI> show volumes -csv
+show volumes -csv
+[Volume No.],[Volume Name],[Status],[Type],[RG or TPP or FTRP No.],[RG or TPP or FTRP Name],[Size(MB)],[Copy Protection]
+0,ForeignVol1,Available,TPV,0,RAIDGRP-1,39845888,Disable
+1,ForeignVol2,Available,TPV,0,RAIDGRP-1,20971520,Disable
+2,dt-test-001,Available,TPV,0,RAIDGRP-1,10240,Disable
+3,one-3,Available,TPV,0,RAIDGRP-1,20480,Disable
+4,test,Available,TPV,0,RAIDGRP-1,102400,Disable
+
+```
+
 * runtime less than 1s
 * correct luns can be filtered using `grep -w -E "one-[0-9]*"`
 * snapshots / clones might have a suffix
