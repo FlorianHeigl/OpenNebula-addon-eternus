@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # -------------------------------------------------------------------------- #
 # Copyright 2014-2016, Laurent Grawet <dev@grawet.be>                        #
 # 2020, Eternus version, Florian Heigl <fhe@deepthink.ag>                    #
@@ -31,15 +32,15 @@ FLOCK_FD=200
 # Use ddpt instead of dd to speed up data transferts using sparse copy
 USE_DDPT=1
 
-BLOCKDEV=blockdev
+#BLOCKDEV=blockdev
 DDPT=ddpt
-DMSETUP=dmsetup
-FIND=find
+#DMSETUP=dmsetup
+#FIND=find
 FLOCK=flock
-HEAD=head
+#HEAD=head
 MULTIPATH=multipath
-OD=od
-TEE=tee
+#OD=od
+#TEE=tee
 
 function eternus_lock {
     local STATUS
@@ -109,7 +110,7 @@ function eternus_get_vvol_uid {
     STATUS=0
 # ex:     3 one-3                            Available                 TPV               OFF        -                     -    0 RAIDGRP-1              - -                    20480              - Disable    Default   Thin       600000E00ABC0000002C13F800030000 Default  Follow Host Response          
 
-    VVOL_UID=$( eternus_ssh_monitor_and_log $ARRAY_MGMT_IP \ 
+    VVOL_UID=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
          "show volumes -mode detail" | grep "${ARRAY_POOL_NAME}" | grep -w "${VVOL_NAME}" | awk '{print tolower($17)}' )
     if [ -n "$VVOL_UID" ]; then
         echo "$VVOL_UID"
@@ -127,7 +128,7 @@ function eternus_get_vvol_name {
     VVOL_UID="$1"
     ARRAY_MGMT_IP="$2"
     STATUS=0
-    VVOL_NAME=$( eternus_ssh_monitor_and_log $ARRAY_MGMT_IP \ 
+    VVOL_NAME=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
          "show volumes -mode detail" | grep "${ARRAY_POOL_NAME}" | grep -w "${VVOL_UID}" | awk '{print $2}' )
     if [ -n "$VVOL_NAME" ]; then
         echo "$VVOL_NAME"
@@ -145,7 +146,7 @@ function eternus_get_vvol_size {
     VVOL_NAME="$1"
     ARRAY_MGMT_IP="$2"
     STATUS=0
-    VVOL_SIZE=`eternus_ssh_monitor_and_log $ARRAY_MGMT_IP \
+    VVOL_SIZE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
         "show volumes -mode detail" | grep "${ARRAY_POOL_NAME}" | grep -w "${VVOL_NAME}" | awk '{print ($12)}' )
     if [ -n "$VVOL_SIZE" ]; then
         echo "$VVOL_SIZE"
@@ -158,18 +159,18 @@ function eternus_get_vvol_size {
     fi
 }
 
-# REMOVE (used in ds/rm, tm/delete, tm/mvds)
-function eternus_lsvvoldependentmaps {
-    local VVOL_NAME ARRAY_MGMT_IP i
-    local -a FCMAP
-    VVOL_NAME="$1"
-    ARRAY_MGMT_IP="$2"
-
-    while IFS= read -r line; do
-        FCMAP[i++]="$line"
-    done < <(eternus_ssh_monitor_and_log $ARRAY_MGMT_IP "lsfcmap -nohdr -delim : -filtervalue source_vvol_name=$VVOL_NAME")
-    echo ${FCMAP[@]}
-}
+# REMOVE (used in ds/rm, tm/elete, tm/mvds)
+#function eternus_lsvvoldependentmaps {
+#    local VVOL_NAME ARRAY_MGMT_IP i
+#    local -a FCMAP
+#    VVOL_NAME="$1"
+#    ARRAY_MGMT_IP="$2"
+#
+#    while IFS= read -r line; do
+#        FCMAP[i++]="$line"
+#    done < <(eternus_ssh_monitor_and_log $ARRAY_MGMT_IP "lsfcmap -nohdr -delim : -filtervalue source_vvol_name=$VVOL_NAME")
+#    echo "${FCMAP[@]}"
+#}
 
 # TEST
 function eternus_map {
@@ -178,17 +179,17 @@ function eternus_map {
     HOST="$2"
     VVOL="$3"
     # get list of mapped luns in our lun group
-    FREE_LUN_CMD=`eternus_ssh_monitor_and_log $ARRAY_MGMT_IP \
-        "show lun-group -lg-name OPENNEBULA" | awk '$1 ~ /^[0-9]/ { print $1}'`
+    FREE_LUN_CMD=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
+        "show lun-group -lg-name OPENNEBULA" | awk '$1 ~ /^[0-9]/ { print $1}' )
 
     # find first unused LUN ID
-    FREE_LUN=$( for i in {0..255} ; do if [[ ! "${USED[@]}" =~ $i ]] ; then echo $i frei ; break ; fi ; done )
+    FREE_LUN=$( for i in {0..255} ; do if [[ ! "${USED[*]}" =~ $i ]] ; then echo "${i}" ; break ; fi ; done )
 
-    if [[ -n ${FREE_LUN ]]; then
-        MAP_CMD=`eternus_ssh_monitor_and_log $ARRAY_MGMT_IP \
-            set lun-group -lg-name OPENNEBULA -volume-name ${VVOL} -lun $FREE_LUN"`
+    if [[ -n ${FREE_LUN} ]]; then
+        MAP_CMD=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
+            "set lun-group -lg-name OPENNEBULA -volume-name ${VVOL} -lun ${FREE_LUN}" )
     else
-        "Error mapping vvol $VVOL to $HOST"`
+        "Error mapping vvol $VVOL to $HOST"
     fi
 }
 
@@ -198,11 +199,11 @@ function eternus_unmap {
     ARRAY_MGMT_IP="$1"
     HOST="$2"
     VVOL="$3"
-    LUN_ID_CMD=`eternus_ssh_monitor_and_log $ARRAY_MGMT_IP \
-        "show lun-group -lg-name OPENNEBULA" | grep -w "${VVOL}" | awk '{print $1}'`
-    UNMAP_CMD=`eternus_ssh_monitor_and_log $ARRAY_MGMT_IP \
-        delete lun-group -lg-name lg-dt-test -lun $LUN_ID`
-
+    LUN_ID_CMD=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
+        "show lun-group -lg-name OPENNEBULA" | grep -w "${VVOL}" | awk '{print $1}' )
+    UNMAP_CMD=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
+        "delete lun-group -lg-name lg-dt-test -lun $LUN_ID" )
+    return $?
 }
 
 # UNUSED.
@@ -247,8 +248,8 @@ function get_datastore_attr {
     local DS_ID DS_ATTR ATTR
     DS_ID="$1"
     DS_ATTR="$2"
-    ATTR=`onedatastore show $DS_ID | $GREP -w $DS_ATTR | $CUT -d\" -f2`
-    if [ -n $ATTR ]; then
+    ATTR=$( onedatastore show "$DS_ID" | $GREP -w "$DS_ATTR" | $CUT -d\" -f2 )
+    if [ -n "${ATTR}" ]; then
         echo "$ATTR"
     fi
 }
