@@ -61,7 +61,7 @@ fi
 # this catches the following line:
 #   0 RG-1            Online       RAID1+0  Available          38.44 TB    58.03 TB        151 610.62 GB   Normal        90       - Disable       21
 MONITOR_SCRIPT=$(cat <<EOF
-    TP_USAGE="$( ssh "${ARRAY_MGMTIP}" "show thin-pro-pools" 2>&1 | grep -E '(^Thin|^No)' | grep "${ARRAY_POOL_NAME}" )"
+    TP_USAGE="$( ssh "${ARRAY_MGMTIP}" "show thin-pro-pools" 2>&1 | grep -v -E '(^Thin|^No)' | grep "${ARRAY_POOL_NAME}" )"
     echo "\${TP_USAGE}"
 EOF
 )
