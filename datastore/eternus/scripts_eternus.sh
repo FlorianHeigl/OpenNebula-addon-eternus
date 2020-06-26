@@ -103,6 +103,7 @@ function eternus_ssh_monitor_and_log
     echo "$SSH_EXEC_OUT"
 }
 
+# TEST: OK
 function eternus_get_vvol_uid {
     local VVOL_NAME ARRAY_MGMT_IP STATUS VVOL_UID
     VVOL_NAME="$1"
@@ -123,13 +124,14 @@ function eternus_get_vvol_uid {
     fi
 }
 
+# TEST: OK
 function eternus_get_vvol_name {
     local VVOL_UID ARRAY_MGMT_IP STATUS VVOL_NAME
     VVOL_UID="$1"
     ARRAY_MGMT_IP="$2"
     STATUS=0
     VVOL_NAME=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
-         "show volumes -mode detail" | grep "${ARRAY_POOL_NAME}" | grep -w "${VVOL_UID}" | awk '{print $2}' )
+         "show volumes -mode detail" | grep "${ARRAY_POOL_NAME}" | grep -i "${VVOL_UID}" | awk '{print $2}' )
     if [ -n "$VVOL_NAME" ]; then
         echo "$VVOL_NAME"
         exit $STATUS
@@ -141,6 +143,7 @@ function eternus_get_vvol_name {
     fi
 }
 
+# TEST: OK
 function eternus_get_vvol_size {
     local VVOL_NAME ARRAY_MGMT_IP STATUS VVOL_SIZE
     VVOL_NAME="$1"
@@ -172,19 +175,20 @@ function eternus_get_vvol_size {
 #    echo "${FCMAP[@]}"
 #}
 
-# TEST
+# TEST: OK
 function eternus_map {
     local ARRAY_MGMT_IP HOST VVOL MAP_CMD
     ARRAY_MGMT_IP="$1"
     HOST="$2"
     VVOL="$3"
     # get list of mapped luns in our lun group
-    FREE_LUN_CMD=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
-        "show lun-group -lg-name OPENNEBULA" | awk '$1 ~ /^[0-9]/ { print $1}' )
+    FREE_LUN_CMD="$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
+        "show lun-group -lg-name OPENNEBULA" | awk '$1 ~ /^[0-9]/ { print $1}' )"
 
     # find first unused LUN ID
-    FREE_LUN=$( for i in {0..255} ; do if [[ ! "${USED[*]}" =~ $i ]] ; then echo "${i}" ; break ; fi ; done )
+    FREE_LUN=$( for i in {0..255} ; do if [[ ! "${FREE_LUN_CMD[*]}" =~ $i ]] ; then echo "${i}" ; break ; fi ; done )
 
+    # TODO: grep Error here or in eternus_ssh_monitor_and_log. let's see.
     if [[ -n ${FREE_LUN} ]]; then
         MAP_CMD=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
             "set lun-group -lg-name OPENNEBULA -volume-name ${VVOL} -lun ${FREE_LUN}" )
@@ -193,17 +197,17 @@ function eternus_map {
     fi
 }
 
-# TEST
+# TEST: OK
 function eternus_unmap {
     local ARRAY_MGMT_IP HOST VVOL UNMAP_CMD
     ARRAY_MGMT_IP="$1"
     HOST="$2"
     VVOL="$3"
-    LUN_ID_CMD=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
+    LUN_ID=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
         "show lun-group -lg-name OPENNEBULA" | grep -w "${VVOL}" | awk '{print $1}' )
     UNMAP_CMD=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
-        "delete lun-group -lg-name lg-dt-test -lun $LUN_ID" )
-    return $?
+        "delete lun-group -lg-name OPENNEBULA -lun $LUN_ID" )
+    exit $?
 }
 
 # UNUSED.
