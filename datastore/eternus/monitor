@@ -1,12 +1,22 @@
 #!/bin/bash
 
-###############################################################################
-# This script is used to monitor the free and used space of a datastore
-###############################################################################
-# for Fujitsu Eternus DX series
+# OpenNebula driver for Fujitsu Eternus DX series
+# https://github.com/deepthinkag/OpenNebula-addon-eternus/
 # <fhe@deepthink.ag>
 
+#PHASE: INIT
+#monitor: monitors a datastore
+#ARGUMENTS: datastore_action_dump image_id
+#datastore_image_dump is an XML dump of the driver action encoded in Base 64. See a decoded example.
+#monitor data The monitoring information of the datastore, namely “USED_MB=…\nTOTAL_MB=…\nFREE_MB=…” which are respectively the used size of the datastore in MB, the total capacity of the datastore in MB and the available space in the datastore in MB.
+
 # -------- Set up the environment to source common tools & conf ------------
+
+set -u
+
+[[ $# != 2 ]] || exit 1
+DRV_ACTION="${1}"
+ID="${2}"
 
 if [ -z "${ONE_LOCATION}" ]; then
     LIB_LOCATION=/usr/lib/one
@@ -14,40 +24,19 @@ else
     LIB_LOCATION=$ONE_LOCATION/lib
 fi
 
-. $LIB_LOCATION/sh/scripts_common.sh
+DRV_PATH=$(dirname  "$0")
+DRV_TASK=$(basename "$0")
 
-DRIVER_PATH=$(dirname $0)
-source ${DRIVER_PATH}/../libfs.sh
 
-# -------- Get datastore arguments from OpenNebula core ------------
+# source opennebula tools and eternus scripts
+for lib in ${LIB_LOCATION}/sh/scripts_common.sh ${DRV_PATH}/../libfs.sh ${DRV_PATH}/scripts_eternus.sh; do
+    bash -eun "$lib" && source "$lib" || { echo "Error: failed to set up driver"; exit 1; }
+done
 
-DRV_ACTION=$1
-ID=$2
+# library
+get_xpath_info
 
-XPATH="${DRIVER_PATH}/../xpath.rb -b $DRV_ACTION"
-
-unset i j XPATH_ELEMENTS
-
-while IFS= read -r -d '' element; do
-    XPATH_ELEMENTS[i++]="$element"
-done < <($XPATH     /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/BRIDGE_LIST   \
-                    /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/ARRAY_NAME    \
-                    /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/ARRAY_POOL_NAME    \
-                    /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/ARRAY_MGMTIP)
-# ARRAY_NAME name of the eternus storage under THIS datastore
-# ARRAY_MGMTIP management ip address of the eternus storage under THIS datastore
-# ARRAY_POOL_NAME the thin provisioning pool to use for this LUN
-# we assume one initiator group
-# the driver does not handle any group operation, you need already
-# attached and multipathed storage connectivity
-
-unset i
-
-BRIDGE_LIST="${XPATH_ELEMENTS[i++]}"
-ARRAY_NAME="${XPATH_ELEMENTS[i++]}"
-ARRAY_POOL_NAME="${XPATH_ELEMENTS[i++]}"
-ARRAY_MGMTIP="${XPATH_ELEMENTS[i++]}"
-
+#PHASE: PREP
 HOST=$( get_destination_host )
 # point at system with network access to mgmt ip *AND .ssh/config set up*
 
@@ -55,6 +44,8 @@ if [ -z "$HOST" ]; then
     error_message "Datastore template missing 'BRIDGE_LIST' attribute."
     exit 1
 fi
+
+#PHASE: RUN
 
 # ------------ Compute datastore usage -------------
 # complete output: see doc/commands-overview.md
@@ -71,7 +62,8 @@ EOF
 MONITOR_DATA=$(ssh_monitor_and_log "${HOST}" "${MONITOR_SCRIPT}")
 MONITOR_STATUS=$?
 
-
+#PHASE: POST
+#RETURNS: monitor data
 # TODO: postcond: validate generated monitor result
 # if MONITOR_DATA matches MONITOR_DATA_REGEX ]; then
 if [ $MONITOR_STATUS = 0 ]; then

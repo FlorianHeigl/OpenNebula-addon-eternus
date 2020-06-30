@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# OpenNebula driver for Fujitsu Eternus DX series
+# https://github.com/deepthinkag/OpenNebula-addon-eternus/
+# <fhe@deepthink.ag>
+
 # -------------------------------------------------------------------------- #
 # Copyright 2014-2016, Laurent Grawet <dev@grawet.be>                        #
 # 2020, Eternus version, Florian Heigl <fhe@deepthink.ag>                    #
