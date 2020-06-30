@@ -59,7 +59,7 @@ DEV="/dev/mapper/${MAP_NAME}"
 #PHASE: POST
 #RETURNS: image_source size
 
-echo "$DEV" "$SIZE"
+echo "${DEV}" "{$SIZE}"
 
 
 # is this useless code? since no code is run if type is other than those 3...
