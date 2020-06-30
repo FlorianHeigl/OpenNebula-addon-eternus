@@ -6,7 +6,7 @@
 
 #PHASE: INIT
 
-#mkfs: creates a new empty image in the datastore
+#rm: removes an image from the datastore
 #ARGUMENTS: datastore_image_dump image_id
 #datastore_image_dump is an XML dump of the driver action encoded in Base 64.
 #image_source is the image source which will be later sent to the transfer manager.
@@ -43,28 +43,11 @@ fi
 #PHASE: PREP
 DST_HOST=$( get_destination_host "$ID" )
 
-set_up_datastore "$BASE_PATH" "$RESTRICTED_DIRS" "$SAFE_DIRS" "$UMASK"
-
-
 #PHASE: RUN
 VVOL_NAME="one-${ID}"
 
-VVOL_CREATE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMTIP}" \
-        "create volume -pool-name "${ARRAY_POOL_NAME}" -type tpv -size "${SIZE}"mb -name "${VVOL_NAME}"" )
-
-VVOL_UID=$( eternus_get_vvol_uid "${VVOL_NAME}" "${ARRAY_MGMTIP}" )
-MAP_NAME="3${VVOL_UID}"
-DEV="/dev/mapper/${MAP_NAME}"
+VVOL_DELETE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMTIP}" \
+               "delete volume -volume-name "${VVOL_NAME}"" )
 
 #PHASE: POST
-#RETURNS: image_source size
-
-echo "${DEV}" "{$SIZE}"
-
-
-# is this useless code? since no code is run if type is other than those 3...
-# ------------ Image to save_as disk, no need to create a FS ------------
-#
-#if [ "$FSTYPE" = "save_as" ] || [ "$FSTYPE" = "raw" ] || [ "$FSTYPE" = "" ]; then
-#    exit 0
-#fi
+#RETURNS: -
