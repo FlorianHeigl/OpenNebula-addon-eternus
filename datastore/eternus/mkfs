@@ -35,7 +35,7 @@ done
 # parse XML Data from DRV_ACTION
 get_xpath_info
 
-if [[ $DEBUG = "y" ]]; then
+if [[ $DEBUG = "YES" ]]; then
     echo "$DRV_ACTION" > /var/tmp/one/eternus-"${DRV_TASK}".params
     exec &> >(tee -a /var/tmp/one/eternus-"${DRV_TASK}.log")
 fi
