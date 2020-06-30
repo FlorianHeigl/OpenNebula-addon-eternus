@@ -12,9 +12,9 @@
 
 # -------- Set up the environment to source common tools & conf ------------
 
-set -u
+#set -u
 
-[[ $# != 2 ]] || exit 1
+[[ $# == 2 ]] || exit 1
 DRV_ACTION="${1}"
 ID="${2}"
 

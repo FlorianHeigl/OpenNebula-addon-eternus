@@ -11,9 +11,9 @@
 #datastore_image_dump is an XML dump of the driver action encoded in Base 64.
 #image_source is the image source which will be later sent to the transfer manager.
 
-set -u
+#set -u
 
-[[ $# != 2 ]] || exit 1
+[[ $# == 2 ]] || exit 1
 DRV_ACTION="${1}"
 ID="${2}"
 
