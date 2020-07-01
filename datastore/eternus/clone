@@ -51,10 +51,10 @@ DEV_SRC=${IMAGE_PATH}
 #PHASE: RUN
 VVOL_NAME="one-${ID}"
 
-VVOL_CREATE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMTIP}" \
+VVOL_CREATE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
         "create volume -pool-name "${ARRAY_POOL_NAME}" -type tpv -size "${SIZE}"mb -name "${VVOL_NAME}"" )
 
-VVOL_UID=$( eternus_get_vvol_uid "${VVOL_NAME}" "${ARRAY_MGMTIP}" )
+VVOL_UID=$( eternus_get_vvol_uid "${VVOL_NAME}" "${ARRAY_MGMT_IP}" )
 MAP_NAME="3${VVOL_UID}"
 DEV="/dev/mapper/${MAP_NAME}"
 

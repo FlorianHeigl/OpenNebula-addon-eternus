@@ -46,7 +46,7 @@ DST_HOST=$( get_destination_host "$ID" )
 #PHASE: RUN
 VVOL_NAME="one-${ID}"
 
-VVOL_DELETE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMTIP}" \
+VVOL_DELETE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
                "delete volume -volume-name "${VVOL_NAME}"" )
 
 #PHASE: POST
