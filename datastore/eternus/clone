@@ -105,7 +105,6 @@ CLONE_CMD=$(cat <<EOF
             exit 1
         fi
 
-        set -x
         # SECFIX: why sudo, both sides belong to oneadmin?
         $SUDO $(clone_command "$SRC_DEV" "$DEV")
         $SUDO $(multipath_flush "$SRC_MAP_NAME")
@@ -134,8 +133,9 @@ ssh_exec_and_log "$DST_HOST" "$CLONE_CMD" \
 #PHASE: POST
 #RETURNS: source
 
-# unmap immer ok?
-eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME_SRC"
-eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME"
-
 echo "${VVOL_NAME}:${VVOL_UID}" 
+
+# unmap immer ok?
+$( eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME_SRC" ) &&
+$( eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME" ) && exit $?
+
