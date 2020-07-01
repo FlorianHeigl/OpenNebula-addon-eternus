@@ -1,0 +1,134 @@
+#!/bin/bash
+
+# OpenNebula driver for Fujitsu Eternus DX series
+# https://github.com/deepthinkag/OpenNebula-addon-eternus/
+# <fhe@deepthink.ag>
+
+# -------------------------------------------------------------------------- #
+# Copyright 2014-2016, Laurent Grawet <dev@grawet.be>                        #
+# Adapted for Eternus
+#                                                                            #
+# Licensed under the Apache License, Version 2.0 (the "License"); you may    #
+# not use this file except in compliance with the License. You may obtain    #
+# a copy of the License at                                                   #
+#                                                                            #
+# http://www.apache.org/licenses/LICENSE-2.0                                 #
+#                                                                            #
+# Unless required by applicable law or agreed to in writing, software        #
+# distributed under the License is distributed on an "AS IS" BASIS,          #
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.   #
+# See the License for the specific language governing permissions and        #
+# limitations under the License.                                             #
+#--------------------------------------------------------------------------- #
+
+#PHASE: INIT
+
+# ln fe:SOURCE host:remote_system_ds/disk.i vmid dsid
+#   - fe is the front-end hostname
+#   - SOURCE is the path of the disk image in the form DS_BASE_PATH/disk
+#   - host is the target host to deploy the VM
+#   - remote_system_ds is the path for the system datastore in the host
+#   - vmid is the id of the VM
+#   - dsid is the target datastore (0 is the system datastore)
+
+SRC=$1
+DST=$2
+
+VMID=$3
+DSID=$4
+
+if [ -z "${ONE_LOCATION}" ]; then
+    TMCOMMON=/var/lib/one/remotes/tm/tm_common.sh
+else
+    TMCOMMON=$ONE_LOCATION/var/remotes/tm/tm_common.sh
+fi
+
+DRV_PATH=$(dirname  "$0")
+DRV_TASK=$(basename "$0")
+
+# source opennebula tools and eternus scripts
+for lib in ${TMCOMMON} ${DRV_PATH}/scripts_eternus.sh; do
+    bash -eun "$lib" && source "$lib" || { echo "Error: failed to set up driver"; exit 1; }
+done
+
+# parse XML Data from DRV_ACTION
+get_xpath_info
+
+if [[ $DEBUG = "YES" ]]; then
+    echo "$DRV_ACTION" > /var/tmp/one/eternus-"${DRV_TASK}".params
+    exec &> >(tee -a /var/tmp/one/eternus-"${DRV_TASK}.log")
+fi
+
+#PHASE: PREP
+DST_HOST=$( get_destination_host "$ID" )
+
+# split ONE's PATH info: one-351:60001234...
+VVOL_NAME=${IMAGE_PATH%:*}
+VVOL_UID=${IMAGE_PATH#*:}
+IQN=`arg_path $SRC`
+DST_PATH=`arg_path $DST`
+DST_HOST=`arg_host $DST`
+DST_DIR=`dirname $DST_PATH`
+
+
+#-------------------------------------------------------------------------------
+# Get image information
+#-------------------------------------------------------------------------------
+
+#VVOL_NAME=`echo $IQN|$AWK -F. '{print $(NF)}'`
+
+#-------------------------------------------------------------------------------
+# Start actions
+#-------------------------------------------------------------------------------
+
+log "Mapping $DST_HOST:$VVOL_NAME"
+
+
+#VVOL_UID=`v7000_get_vdisk_uid ${VVOL_NAME} ${MGMT}`
+DEV="/dev/mapper/3${VVOL_UID}"
+eternus_map "$MGMT" "$DST_HOST" "$VVOL_NAME"
+
+DISCOVER_CMD=$(cat <<EOF
+    set -e
+    mkdir -p "$DST_DIR"
+    $SUDO $(iscsiadm_session_rescan)
+    $SUDO $(multipath_rescan)
+    # Wait a bit for new mapping
+    COUNTER=1
+    while [ ! -e "$DEV" ] && [ \$COUNTER -le 10 ]; do
+        sleep 1
+        COUNTER=\$((\$COUNTER + 1))
+    done
+    if [ ! -e "$DEV" ]; then
+        # Last chance to get our mapping
+        $SUDO $(multipath_rescan)
+        COUNTER=1
+        while [ ! -e "$DEV" ] && [ \$COUNTER -le 10 ]; do
+            sleep 1
+            COUNTER=\$((\$COUNTER + 1))
+        done
+    fi
+    # Exit with error if mapping does not exist
+    if [ ! -e "$DEV" ]; then
+        exit 1
+    fi
+    DM_HOLDER=dm-\$($SUDO $DMSETUP info -c --noheadings "$DEV" | $AWK -F: '{print \$3}')
+    DM_SLAVE=\$(ls /sys/block/\${DM_HOLDER}/slaves)
+    # Wait a bit for mapping's paths
+    COUNTER=1
+    while [ ! "\${DM_SLAVE}" ] && [ \$COUNTER -le 10 ]; do
+        sleep 1
+        COUNTER=\$((\$COUNTER + 1))
+    done
+    # Exit with error if mapping has no path
+    if [ ! "\${DM_SLAVE}" ]; then
+        exit 1
+    fi
+    ln -sf "$DEV" "$DST_PATH"
+EOF
+)
+
+ssh_exec_and_log "$DST_HOST" "$DISCOVER_CMD" \
+    "Error registering $DST_HOST:$DEV"
+
+exit 0
