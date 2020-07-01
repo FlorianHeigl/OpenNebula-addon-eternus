@@ -45,8 +45,13 @@ DST_HOST=$( get_destination_host "$ID" )
 
 set_up_datastore "$BASE_PATH" "$RESTRICTED_DIRS" "$SAFE_DIRS" "$UMASK"
 
-# /dev/mapper/3uid
-DEV_SRC=${IMAGE_PATH}
+
+# split ONE's PATH info: one-351:60001234...
+VVOL_NAME_SRC=${IMAGE_PATH%:*}
+VVOL_UID_SRC=${IMAGE_PATH#*:}
+# form the expected devmapper device node /dev/mapper/3uid
+DEV_SRC=/dev/mapper/3${VVOL_UID_SRC}
+
 
 #PHASE: RUN
 VVOL_NAME="one-${ID}"
@@ -55,11 +60,10 @@ VVOL_CREATE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
         "create volume -pool-name "${ARRAY_POOL_NAME}" -type tpv -size "${SIZE}"mb -name "${VVOL_NAME}"" )
 
 VVOL_UID=$( eternus_get_vvol_uid "${VVOL_NAME}" "${ARRAY_MGMT_IP}" )
-MAP_NAME="3${VVOL_UID}"
-DEV="/dev/mapper/${MAP_NAME}"
+DEV="/dev/mapper/$3{VVOL_UID}"
 
+eternus_map $ARRAY_MGMT_IP $DST_HOST $VVOL_NAME_SRC
 eternus_map $ARRAY_MGMT_IP $DST_HOST $VVOL_NAME
-#eternus_map $ARRAY_MGMT_IP $DST_HOST $VVOL_NAME
 
 CLONE_CMD=$(cat <<EOF
     set -e
@@ -72,12 +76,12 @@ EOF
 
 ssh_exec_and_log "$DST_HOST" "$CLONE_CMD" "Error registering $DST_HOST:$DEV"
 
-echo "CLONE_CMD: $CLONE_CMD"
-echo "$SUDO $DD if=$DEV_SRC of=$DEV bs=64k"
+#echo "CLONE_CMD: $CLONE_CMD"
+#echo "$SUDO $DD if=$DEV_SRC of=$DEV bs=64k"
 
 
 #PHASE: POST
 #RETURNS: source
 #source the new source for the image.
 
-echo "${DEV}" 
+echo "${VVOL_NAME}:${VVOL_UID}" 
