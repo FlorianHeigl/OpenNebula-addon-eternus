@@ -60,7 +60,7 @@ VVOL_CREATE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
         "create volume -pool-name ${ARRAY_POOL_NAME} -type tpv -size ${SIZE}mb -name ${VVOL_NAME}" )
 
 VVOL_UID=$( eternus_get_vvol_uid "${VVOL_NAME}" "${ARRAY_MGMT_IP}" )
-DEV="/dev/mapper/$3{VVOL_UID}"
+DEV="/dev/mapper/3${VVOL_UID}"
 
 eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME_SRC"
 eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME"
