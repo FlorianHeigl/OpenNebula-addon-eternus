@@ -69,7 +69,6 @@ CLONE_CMD=$(cat <<EOF
     set -e
     $SUDO $(iscsiadm_session_rescan)
     $SUDO $(multipath_rescan)
-    echo clone_command $SUDO $DD "$SRC_DEV" "$DEV"
     COUNTER=1
     while { [ ! -e "$SRC_DEV" ] || [ ! -e "$DEV" ]; } && [ \$COUNTER -le 10 ]; do
         sleep 1
@@ -104,20 +103,23 @@ CLONE_CMD=$(cat <<EOF
             exit 1
         fi
 
+        # SECFIX: why sudo, both sides belong to oneadmin?
         $SUDO $(clone_command "$SRC_DEV" "$DEV")
         $SUDO $(multipath_flush "$SRC_MAP_NAME")
         $SUDO $(multipath_flush "$MAP_NAME")
         unset device 
         for device in \${SRC_DM_SLAVE}
         do
-            $SUDO $BLOCKDEV --flushbufs /dev/\${device}
-            echo 1 | $SUDO $TEE /sys/block/\${device}/device/delete
+            $SUDO blockdev --flushbufs /dev/\${device}
+            # SECFIX: can NEVER savely allow tee via sudo...?
+            echo 1 | $SUDO tee /sys/block/\${device}/device/delete
         done
         unset device 
         for device in \${DM_SLAVE}
         do
-            $SUDO $BLOCKDEV --flushbufs /dev/\${device}
-            echo 1 | $SUDO $TEE /sys/block/\${device}/device/delete
+            $SUDO blockdev --flushbufs /dev/\${device}
+            # SECFIX: can NEVER savely allow tee via sudo...?
+            echo 1 | $SUDO tee /sys/block/\${device}/device/delete
         done
 EOF
 )
