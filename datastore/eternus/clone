@@ -50,34 +50,83 @@ set_up_datastore "$BASE_PATH" "$RESTRICTED_DIRS" "$SAFE_DIRS" "$UMASK"
 VVOL_NAME_SRC=${IMAGE_PATH%:*}
 VVOL_UID_SRC=${IMAGE_PATH#*:}
 # form the expected devmapper device node /dev/mapper/3uid
-DEV_SRC=/dev/mapper/3${VVOL_UID_SRC}
+SRC_DEV=/dev/mapper/3${VVOL_UID_SRC}
 
 
 #PHASE: RUN
 VVOL_NAME="one-${ID}"
 
 VVOL_CREATE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
-        "create volume -pool-name "${ARRAY_POOL_NAME}" -type tpv -size "${SIZE}"mb -name "${VVOL_NAME}"" )
+        "create volume -pool-name ${ARRAY_POOL_NAME} -type tpv -size ${SIZE}mb -name ${VVOL_NAME}" )
 
 VVOL_UID=$( eternus_get_vvol_uid "${VVOL_NAME}" "${ARRAY_MGMT_IP}" )
 DEV="/dev/mapper/$3{VVOL_UID}"
 
-eternus_map $ARRAY_MGMT_IP $DST_HOST $VVOL_NAME_SRC
-eternus_map $ARRAY_MGMT_IP $DST_HOST $VVOL_NAME
+eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME_SRC"
+eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME"
 
 CLONE_CMD=$(cat <<EOF
     set -e
-#iscsi_map $VVOL_UID
-#iscsi_map $basenmae... aua
-#test -b ?
-    echo $SUDO $DD if=$DEV_SRC of=$DEV bs=64k
+    $SUDO $(iscsiadm_session_rescan)
+    $SUDO $(multipath_rescan)
+    echo clone_command $SUDO $DD "$SRC_DEV" "$DEV"
+    COUNTER=1
+    while { [ ! -e "$SRC_DEV" ] || [ ! -e "$DEV" ]; } && [ \$COUNTER -le 10 ]; do
+        sleep 1
+        COUNTER=\$((\$COUNTER + 1))
+    done
+        if [ ! -e "$SRC_DEV" ] || [ ! -e "$DEV" ]; then
+            # Last chance to get our mappings
+            $SUDO $(multipath_rescan)
+            COUNTER=1
+            while { [ ! -e "$SRC_DEV" ] || [ ! -e "$DEV" ]; } && [ \$COUNTER -le 10 ]; do
+                sleep 1
+                COUNTER=\$((\$COUNTER + 1))
+            done
+        fi
+        # Exit with error if mappings do not exist
+        if [ ! -e "$SRC_DEV" ] || [ ! -e "$DEV" ]; then
+            exit 1
+        fi
+
+        SRC_DM_HOLDER=dm-\$($SUDO $DMSETUP info -c --noheadings "$SRC_DEV" | $AWK -F: '{print \$3}')
+        DM_HOLDER=dm-\$($SUDO $DMSETUP info -c --noheadings "$DEV" | $AWK -F: '{print \$3}')
+        SRC_DM_SLAVE=\$(ls -A /sys/block/\${SRC_DM_HOLDER}/slaves)
+        DM_SLAVE=\$(ls -A /sys/block/\${DM_HOLDER}/slaves)
+        # Wait a bit for mapping's paths
+        COUNTER=1
+        while [ ! "\${SRC_DM_SLAVE}"  ] || [ ! "\${DM_SLAVE}"  ] && [ \$COUNTER -le 10 ]; do
+            sleep 1
+            COUNTER=\$((\$COUNTER + 1))
+        done
+        # Exit with error if mappings have no path
+        if [ ! "\${SRC_DM_SLAVE}" ] || [ ! "\${DM_SLAVE}" ]; then
+            exit 1
+        fi
+
+        $SUDO $(clone_command "$SRC_DEV" "$DEV")
+        $SUDO $(multipath_flush "$SRC_MAP_NAME")
+        $SUDO $(multipath_flush "$MAP_NAME")
+        unset device 
+        for device in \${SRC_DM_SLAVE}
+        do
+            $SUDO $BLOCKDEV --flushbufs /dev/\${device}
+            echo 1 | $SUDO $TEE /sys/block/\${device}/device/delete
+        done
+        unset device 
+        for device in \${DM_SLAVE}
+        do
+            $SUDO $BLOCKDEV --flushbufs /dev/\${device}
+            echo 1 | $SUDO $TEE /sys/block/\${device}/device/delete
+        done
 EOF
 )
 
-ssh_exec_and_log "$DST_HOST" "$CLONE_CMD" "Error registering $DST_HOST:$DEV"
+ssh_exec_and_log "$DST_HOST" "$CLONE_CMD" \
+ "Error registering $DST_HOST:$DEV"
 
 #echo "CLONE_CMD: $CLONE_CMD"
-#echo "$SUDO $DD if=$DEV_SRC of=$DEV bs=64k"
+#echo "$SUDO $DD if=$SRC_DEV of=$DEV bs=64k"
 
 
 #PHASE: POST
@@ -85,7 +134,7 @@ ssh_exec_and_log "$DST_HOST" "$CLONE_CMD" "Error registering $DST_HOST:$DEV"
 #source the new source for the image.
 
 # unmap immer ok?
-eternus_unmap $ARRAY_MGMT_IP $DST_HOST $VVOL_NAME_SRC
-eternus_unmap $ARRAY_MGMT_IP $DST_HOST $VVOL_NAME
+eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME_SRC"
+eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME"
 
 echo "${VVOL_NAME}:${VVOL_UID}" 
