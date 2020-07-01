@@ -229,6 +229,7 @@ function eternus_map {
     ARRAY_MGMT_IP="$1"
     HOST="$2"
     VVOL="$3"
+    # TODO: get this list and then check if lun is already mapped! if yes, just return!
     # get list of mapped luns in our lun group
     FREE_LUN_CMD="$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
         "show lun-group -lg-name OPENNEBULA" | awk '$1 ~ /^[0-9]/ { print $1}' )"
