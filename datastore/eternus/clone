@@ -84,4 +84,8 @@ ssh_exec_and_log "$DST_HOST" "$CLONE_CMD" "Error registering $DST_HOST:$DEV"
 #RETURNS: source
 #source the new source for the image.
 
+# unmap immer ok?
+eternus_unmap $ARRAY_MGMT_IP $DST_HOST $VVOL_NAME_SRC
+eternus_unmap $ARRAY_MGMT_IP $DST_HOST $VVOL_NAME
+
 echo "${VVOL_NAME}:${VVOL_UID}" 
