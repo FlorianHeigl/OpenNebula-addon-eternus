@@ -89,8 +89,8 @@ CLONE_CMD=$(cat <<EOF
             exit 1
         fi
 
-        SRC_DM_HOLDER=dm-\$($SUDO $DMSETUP info -c --noheadings "$SRC_DEV" | $AWK -F: '{print \$3}')
-        DM_HOLDER=dm-\$($SUDO $DMSETUP info -c --noheadings "$DEV" | $AWK -F: '{print \$3}')
+        SRC_DM_HOLDER=dm-\$($SUDO dmsetup info -c --noheadings "$SRC_DEV" | awk -F: '{print \$3}')
+        DM_HOLDER=dm-\$($SUDO dmsetup info -c --noheadings "$DEV" | awk -F: '{print \$3}')
         SRC_DM_SLAVE=\$(ls -A /sys/block/\${SRC_DM_HOLDER}/slaves)
         DM_SLAVE=\$(ls -A /sys/block/\${DM_HOLDER}/slaves)
         # Wait a bit for mapping's paths
