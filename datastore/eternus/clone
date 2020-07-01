@@ -51,6 +51,7 @@ VVOL_NAME_SRC=${IMAGE_PATH%:*}
 VVOL_UID_SRC=${IMAGE_PATH#*:}
 # form the expected devmapper device node /dev/mapper/3uid
 SRC_DEV=/dev/mapper/3${VVOL_UID_SRC}
+SRC_MAP_NAME="3${VVOL_UID_SRC}"
 
 
 #PHASE: RUN
@@ -61,6 +62,7 @@ VVOL_CREATE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
 
 VVOL_UID=$( eternus_get_vvol_uid "${VVOL_NAME}" "${ARRAY_MGMT_IP}" )
 DEV="/dev/mapper/3${VVOL_UID}"
+MAP_NAME="3${VVOL_UID}"
 
 eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME_SRC"
 eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME"
@@ -103,6 +105,7 @@ CLONE_CMD=$(cat <<EOF
             exit 1
         fi
 
+        set -x
         # SECFIX: why sudo, both sides belong to oneadmin?
         $SUDO $(clone_command "$SRC_DEV" "$DEV")
         $SUDO $(multipath_flush "$SRC_MAP_NAME")
@@ -125,15 +128,11 @@ EOF
 )
 
 ssh_exec_and_log "$DST_HOST" "$CLONE_CMD" \
- "Error registering $DST_HOST:$DEV"
-
-#echo "CLONE_CMD: $CLONE_CMD"
-#echo "$SUDO $DD if=$SRC_DEV of=$DEV bs=64k"
+ "Error registering $DST_HOST:${VVOL_UID}"
 
 
 #PHASE: POST
 #RETURNS: source
-#source the new source for the image.
 
 # unmap immer ok?
 eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME_SRC"
