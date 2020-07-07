@@ -1,12 +1,7 @@
 #!/bin/bash
 
-# OpenNebula driver for Fujitsu Eternus DX series
-# https://github.com/deepthinkag/OpenNebula-addon-eternus/
-# <fhe@deepthink.ag>
-
 # -------------------------------------------------------------------------- #
-# Copyright 2014-2016, Laurent Grawet <dev@grawet.be>                        #
-# Adapted for Eternus
+# Copyright 2014-2016, Laurent Grawet <dev@grawet.be>                             #
 #                                                                            #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may    #
 # not use this file except in compliance with the License. You may obtain    #
@@ -37,6 +32,7 @@ DST=$2
 VMID=$3
 DSID=$4
 
+
 if [ -z "${ONE_LOCATION}" ]; then
     TMCOMMON=/var/lib/one/remotes/tm/tm_common.sh
 else
@@ -47,49 +43,67 @@ DRV_PATH=$(dirname  "$0")
 DRV_TASK=$(basename "$0")
 
 # source opennebula tools and eternus scripts
-for lib in ${TMCOMMON} ${DRV_PATH}/scripts_eternus.sh; do
+for lib in ${TMCOMMON} ${DRV_PATH}/../../datastore/eternus/scripts_eternus.sh ; do
     bash -eun "$lib" && source "$lib" || { echo "Error: failed to set up driver"; exit 1; }
 done
 
-# parse XML Data from DRV_ACTION
-get_xpath_info
+# parse XML Data from stdin :(
+XPATH="${DRV_PATH}/../../datastore/xpath.rb --stdin"
+
+unset i XPATH_ELEMENTS
+
+while IFS= read -r -d '' element; do
+    XPATH_ELEMENTS[i++]="$element"
+done < <(onedatastore show -x $DSID| $XPATH \
+                    /DATASTORE/BASE_PATH \
+                    /DATASTORE/TEMPLATE/RESTRICTED_DIRS \
+                    /DATASTORE/TEMPLATE/SAFE_DIRS \
+                    /DATASTORE/TEMPLATE/UMASK \
+                    /DATASTORE/TEMPLATE/BRIDGE_LIST \
+                    /DATASTORE/TEMPLATE/DEBUG \
+                    /DATASTORE/TEMPLATE/ARRAY_MGMT_IP \
+                    /DATASTORE/TEMPLATE/ARRAY_POOL_NAME)
+
+BASE_PATH="${XPATH_ELEMENTS[0]}"
+RESTRICTED_DIRS="${XPATH_ELEMENTS[1]}"
+SAFE_DIRS="${XPATH_ELEMENTS[2]}"
+UMASK="${XPATH_ELEMENTS[3]}"
+BRIDGE_LIST="${XPATH_ELEMENTS[4]:-$BRIDGE_LIST}"
+DEBUG="${XPATH_ELEMENTS[5]:-NO}"
+ARRAY_MGMT_IP="${XPATH_ELEMENTS[6]}"
+ARRAY_POOL_NAME="${XPATH_ELEMENTS[7]}"
+
 
 if [[ $DEBUG = "YES" ]]; then
-    echo "$DRV_ACTION" > /var/tmp/one/eternus-"${DRV_TASK}".params
-    exec &> >(tee -a /var/tmp/one/eternus-"${DRV_TASK}.log")
+    echo "${*}" > /var/tmp/one/eternus-"${DRV_TASK}".params
+    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
+    echo "SRC:$1
+    DST:$2
+    VMID:$3
+    DSID:$4"
 fi
 
 #PHASE: PREP
-DST_HOST=$( get_destination_host "$ID" )
+#DST_HOST=$( get_destination_host "$ID" )
 
 # split ONE's PATH info: one-351:60001234...
+IMAGE_PATH="$SRC"
 VVOL_NAME=${IMAGE_PATH%:*}
 VVOL_UID=${IMAGE_PATH#*:}
-IQN=`arg_path $SRC`
-DST_PATH=`arg_path $DST`
-DST_HOST=`arg_host $DST`
-DST_DIR=`dirname $DST_PATH`
 
+DST_PATH=$( arg_path "$DST" )
+DST_HOST=$( arg_host "$DST" )
+DST_DIR=$( dirname "$DST_PATH" )
 
-#-------------------------------------------------------------------------------
-# Get image information
-#-------------------------------------------------------------------------------
-
-#VVOL_NAME=`echo $IQN|$AWK -F. '{print $(NF)}'`
-
-#-------------------------------------------------------------------------------
-# Start actions
-#-------------------------------------------------------------------------------
 
 log "Mapping $DST_HOST:$VVOL_NAME"
 
 
-#VVOL_UID=`v7000_get_vdisk_uid ${VVOL_NAME} ${MGMT}`
 DEV="/dev/mapper/3${VVOL_UID}"
-eternus_map "$MGMT" "$DST_HOST" "$VVOL_NAME"
+eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME"
 
 DISCOVER_CMD=$(cat <<EOF
-    set -e
+    set -eu
     mkdir -p "$DST_DIR"
     $SUDO $(iscsiadm_session_rescan)
     $SUDO $(multipath_rescan)
@@ -112,7 +126,7 @@ DISCOVER_CMD=$(cat <<EOF
     if [ ! -e "$DEV" ]; then
         exit 1
     fi
-    DM_HOLDER=dm-\$($SUDO $DMSETUP info -c --noheadings "$DEV" | $AWK -F: '{print \$3}')
+    DM_HOLDER=dm-\$($SUDO dmsetup info -c --noheadings "$DEV" | $AWK -F: '{print \$3}')
     DM_SLAVE=\$(ls /sys/block/\${DM_HOLDER}/slaves)
     # Wait a bit for mapping's paths
     COUNTER=1

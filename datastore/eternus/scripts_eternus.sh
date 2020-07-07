@@ -67,7 +67,9 @@ done < <($XPATH     /DS_DRIVER_ACTION_DATA/DATASTORE/BASE_PATH \
                     /DS_DRIVER_ACTION_DATA/IMAGE/SIZE \
                     /DS_DRIVER_ACTION_DATA/IMAGE/NAME \
                     /DS_DRIVER_ACTION_DATA/IMAGE/SOURCE \
-                    /DS_DRIVER_ACTION_DATA/IMAGE/PATH)
+                    /DS_DRIVER_ACTION_DATA/IMAGE/PATH \
+                    /DS_DRIVER_ACTION_DATA/IMAGE/TEMPLATE/MD5 \
+                    /DS_DRIVER_ACTION_DATA/IMAGE/TEMPLATE/SHA1)
                     
 BASE_PATH="${XPATH_ELEMENTS[0]}"
 RESTRICTED_DIRS="${XPATH_ELEMENTS[1]}"
@@ -82,8 +84,10 @@ SIZE="${XPATH_ELEMENTS[9]:-0}"
 NAME="${XPATH_ELEMENTS[10]}"
 SOURCE="${XPATH_ELEMENTS[11]}"
 IMAGE_PATH="${XPATH_ELEMENTS[12]}"
+MD5="${XPATH_ELEMENTS[13]}"
+SHA1="${XPATH_ELEMENTS[14]}"
 
-export BASE_PATH RESTRICTED_DIRS SAFE_DIRS UMASK BRIDGE_LIST FSTYPE SIZE NAME SOURCE IMAGE_PATH
+export BASE_PATH RESTRICTED_DIRS SAFE_DIRS UMASK BRIDGE_LIST FSTYPE SIZE NAME SOURCE IMAGE_PATH MD5 SHA1
 export DEBUG
 export ARRAY_MGMT_IP ARRAY_POOL_NAME
 
@@ -313,8 +317,8 @@ function clone_command {
     IF="$1"
     OF="$2"
     if [ $USE_DDPT -eq 1 ]; then
-        echo "$DDPT if=$IF of=$OF bs=512 bpt=128 oflag=sparse"
+        "$DDPT if=$IF of=$OF bs=512 bpt=128 oflag=sparse"
     else
-        echo "$DD if=$IF of=$OF bs=64k conv=nocreat"
+        "$DD if=$IF of=$OF bs=64k conv=nocreat"
     fi
 }

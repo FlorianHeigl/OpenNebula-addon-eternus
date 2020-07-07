@@ -1,0 +1,164 @@
+#!/bin/bash
+
+# -------------------------------------------------------------------------- #
+# Copyright 2014, Laurent Grawet <dev@grawet.be>                             #
+#                                                                            #
+# Licensed under the Apache License, Version 2.0 (the "License"); you may    #
+# not use this file except in compliance with the License. You may obtain    #
+# a copy of the License at                                                   #
+#                                                                            #
+# http://www.apache.org/licenses/LICENSE-2.0                                 #
+#                                                                            #
+# Unless required by applicable law or agreed to in writing, software        #
+# distributed under the License is distributed on an "AS IS" BASIS,          #
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.   #
+# See the License for the specific language governing permissions and        #
+# limitations under the License.                                             #
+#--------------------------------------------------------------------------- #
+
+# DELETE <host:remote_system_ds/disk.i|host:remote_system_ds/> vmid dsid
+#   - host is the target host to deploy the VM
+#   - remote_system_ds is the path for the system datastore in the host
+#   - vmid is the id of the VM
+#   - dsid is the target datastore (0 is the system datastore)
+
+DST=$1
+
+VMID=$2
+DSID=$3
+
+
+if [ -z "${ONE_LOCATION}" ]; then
+    TMCOMMON=/var/lib/one/remotes/tm/tm_common.sh
+else
+    TMCOMMON=$ONE_LOCATION/var/remotes/tm/tm_common.sh
+fi
+
+DRV_PATH=$(dirname  "$0")
+DRV_TASK=$(basename "$0")
+
+# source opennebula tools and eternus scripts
+for lib in ${TMCOMMON} ${DRV_PATH}/../../datastore/eternus/scripts_eternus.sh ; do
+    bash -eun "$lib" && source "$lib" || { echo "Error: failed to set up driver"; exit 1; }
+done
+
+DST_PATH=$( arg_path "$DST" )
+DST_HOST=$( arg_host "$DST" )
+
+# parse XML Data from stdin
+XPATH="${DRV_PATH}/../../datastore/xpath.rb --stdin"
+test -x "${XPATH}" || { echo "Xpath not found"; exit 1; }
+
+##
+
+unset i XPATH_ELEMENTS
+
+while IFS= read -r -d '' element; do
+    XPATH_ELEMENTS[i++]="$element"
+done < <(onedatastore show -x $DSID| $XPATH \
+                    /DATASTORE/TEMPLATE/ARRAY_MGMT_IP \
+                    /DATASTORE/TEMPLATE/DEBUG
+        )
+
+ARRAY_MGMT_IP=${XPATH_ELEMENTS[0]}
+DEBUG=${XPATH_ELEMENTS[1]:-NO}
+
+
+DRV_TASK=delete
+if [[ $DEBUG = "YES" ]]; then
+    echo "${*}" > /var/tmp/one/eternus-"${DRV_TASK}".params
+    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
+
+echo "DST=$1
+VMID=$2
+DSID=$3"
+
+fi
+
+#-------------------------------------------------------------------------------
+# Get image information
+#-------------------------------------------------------------------------------
+
+DISK_ID=$(echo "$DST_PATH" | $AWK -F. '{print $NF}')
+
+unset i XPATH_ELEMENTS
+
+while IFS= read -r -d '' element; do
+    XPATH_ELEMENTS[i++]="$element"
+done < <(onevm show -x "$VMID"| "$XPATH" \
+                    /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/SOURCE \
+                    /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/PERSISTENT)
+
+IMAGE_PATH="${XPATH_ELEMENTS[0]}"
+PERSISTENT="${XPATH_ELEMENTS[1]}"
+echo "$IMAGE_PATH"
+
+#VVOL_NAME=${IMAGE_PATH%:*}
+#VVOL_UID=${IMAGE_PATH#*:}
+
+#-------------------------------------------------------------------------------
+# Remove directory if dst_path is a directory
+#-------------------------------------------------------------------------------
+
+if [ "$( is_disk "$DST_PATH" )" -eq 0 ]; then
+    # Directory
+    log "Deleting $DST_PATH"
+    ssh_exec_and_log "$DST_HOST" "set -u ; rm -rf $DST_PATH" "Error deleting $DST_PATH"
+    exit 0
+fi
+
+#-------------------------------------------------------------------------------
+# Flush iSCSI device on hypervisor
+#-------------------------------------------------------------------------------
+
+MAP_NAME=$(eternus_ssh_monitor_and_log "$DST_HOST" "readlink $DST_PATH" | grep -o '3.*$')
+VVOL_UID=${MAP_NAME#3}
+
+VVOL_NAME=$(eternus_get_vvol_name ${VVOL_UID} ${ARRAY_MGMT_IP})
+
+FLUSH_CMD=$(cat <<EOF
+        set -eu
+        DM_HOLDER=dm-\$($SUDO dmsetup info -c --noheadings /dev/mapper/${MAP_NAME} | $AWK -F: '{print \$3}')
+        DM_SLAVE=\$(ls /sys/block/\${DM_HOLDER}/slaves)
+
+        $SUDO $(multipath_flush "$MAP_NAME")
+
+        unset device 
+        for device in \${DM_SLAVE}
+        do 
+            $SUDO blockdev --flushbufs /dev/\${device}
+            echo 1 | $SUDO tee /sys/block/\${device}/device/delete
+        done
+EOF
+)
+
+ssh_exec_and_log "$DST_HOST" "$FLUSH_CMD" \
+    "Error flushing out mapping"
+
+#-------------------------------------------------------------------------------
+# Unmap iSCSI volume on SAN
+#-------------------------------------------------------------------------------
+
+log "Unmapping $DST_HOST:$VVOL_NAME"
+eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME"
+ssh_exec_and_log "$DST_HOST" "$SUDO $(iscsiadm_session_rescan)" \
+    "Error rescanning iscsi sessions on $DST_HOST"
+
+if [ "$PERSISTENT" = "YES" ]; then
+    exit 0
+fi
+
+#-------------------------------------------------------------------------------
+# Remove volume if dst_path is not persistent (check again with volume name)
+#-------------------------------------------------------------------------------
+
+VVOL_TYPE=$(echo $VVOL_NAME | awk -F\- '{printf "%s", $3}; $3=="aux" {printf "-%s", $4}')
+
+if [ "$VVOL_TYPE" = "snapshot" ]; then
+
+    log "Removing copy $ARRAY_MGMT_IP:$VVOL_NAME"
+    eternus_ssh_exec_and_log "$ARRAY_MGMT_IP" "set -e ; echo "deleting not implemeneted: ${VVOL_NAME}"; exit 1" \
+        "Error removing $ARRAY_MGMT_IP:$VVOL_NAME"
+fi
+
+exit 0

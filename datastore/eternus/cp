@@ -1,14 +1,178 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-#exec &> >(tee -a "/tmp/eternus-mkfs.log")
-set -u
+# -------------------------------------------------------------------------- #
+# Copyright 2014, Laurent Grawet <dev@grawet.be>                             #
+#                                                                            #
+# Licensed under the Apache License, Version 2.0 (the "License"); you may    #
+# not use this file except in compliance with the License. You may obtain    #
+# a copy of the License at                                                   #
+#                                                                            #
+# http://www.apache.org/licenses/LICENSE-2.0                                 #
+#                                                                            #
+# Unless required by applicable law or agreed to in writing, software        #
+# distributed under the License is distributed on an "AS IS" BASIS,          #
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.   #
+# See the License for the specific language governing permissions and        #
+# limitations under the License.                                             #
+#--------------------------------------------------------------------------- #
 
-# for Fujitsu Eternus DX series
-# <fhe@deepthink.ag>
+###############################################################################
+# This script is used to copy a VM image (SRC) to the image repository as DST
+# Several SRC types are supported
+###############################################################################
 
-#cp: copies/dumps the image to the datastore
 
-#ARGUMENTS: datastore_image_dump image_id
-#RETURNS: image_source size
-#datastore_image_dump is an XML dump of the driver action encoded in Base 64. 
-#image_source is the image source which will be later sent to the transfer manager
+[[ $# == 2 ]] || exit 1
+DRV_ACTION="${1}"
+ID="${2}"
+
+if [ -z "${ONE_LOCATION}" ]; then
+    LIB_LOCATION=/usr/lib/one
+else
+    LIB_LOCATION=$ONE_LOCATION/lib
+fi
+
+DRV_PATH=$(dirname  $0)
+DRV_TASK=$(basename $0)
+UTILS_PATH="${DRV_PATH}/.."
+
+ 
+
+# source opennebula tools and eternus scripts
+for lib in ${LIB_LOCATION}/sh/scripts_common.sh ${DRV_PATH}/../libfs.sh ${DRV_PATH}/scripts_eternus.sh; do
+    bash -eun "$lib" && source "$lib" || { echo "Error: failed to set up driver"; exit 1; }
+done
+
+# parse XML Data from DRV_ACTION
+get_xpath_info
+
+if [[ $DEBUG = "YES" ]]; then
+    echo "$DRV_ACTION" > /var/tmp/one/eternus-"${DRV_TASK}".params
+    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
+fi
+
+#PHASE: PREP
+
+DST_HOST=$( get_destination_host "$ID" )
+
+# -------- Start actions ------------
+
+set_up_datastore "$BASE_PATH" "$RESTRICTED_DIRS" "$SAFE_DIRS" "$UMASK"
+
+VVOL_NAME="one-${ID}"
+#IQN="$BASE_IQN:2545.`echo $ARRAY_MGMT_IP | awk -F'.' '{print $1}'`.node1.$VVOL_NAME"
+
+
+# was ist das fuer ein schrecklicher code. neu machen!
+#REGISTER_CMD="set -eu ; svctask mkvvol ${AUTOEXPAND} -cache readwrite -copies ${COPIES} \
+#    ${GRAINSIZE_PAR} -iogrp ${IO_GROUP} -mdiskgrp ${MDISK_GROUP} -name ${VVOL_NAME} \
+#    ${RSIZE_PAR} -size ${SIZE} -syncrate ${SYNC_RATE} -unit mb -vtype ${VTYPE}"
+
+#PHASE: RUN
+
+#LUN Anlegen
+VVOL_CREATE=$( eternus_ssh_exec_and_log "${ARRAY_MGMT_IP}" \
+        "create volume -pool-name "${ARRAY_POOL_NAME}" -type tpv -size "${SIZE}"mb -name "${VVOL_NAME}"" "Error registering $ARRAY_MGMT_IP:$VVOL_NAME")
+
+#eternus_ssh_exec_and_log "$ARRAY_MGMT_IP" "$REGISTER_CMD" "Error registering $ARRAY_MGMT_IP:$VVOL_NAME"
+
+
+VVOL_UID=$( eternus_get_vvol_uid "$VVOL_NAME" "$ARRAY_MGMT_IP" )
+MAP_NAME="3${VVOL_UID}"
+DEV="/dev/mapper/${MAP_NAME}"
+
+DOWNLOADER_ARGS=$( set_downloader_args "$MD5" "$SHA1" "$NO_DECOMPRESS" "$LIMIT_TRANSFER_BW" "$IMAGE_PATH" - )
+
+COPY_COMMAND="$UTILS_PATH/downloader.sh $DOWNLOADER_ARGS"
+
+case "$IMAGE_PATH" in
+http://*|https://*)
+    #log "Downloading $IMAGE_PATH to the image repository"
+
+    DUMP="$COPY_COMMAND"
+    ;;
+
+*)
+    if [ `check_restricted $IMAGE_PATH` -eq 1 ]; then
+        log_error "Not allowed to copy images from $RESTRICTED_DIRS"
+        error_message "Not allowed to copy image file $IMAGE_PATH"
+        exit 1
+    fi
+
+    #log "Copying local image $IMAGE_PATH to the image repository"
+
+    DUMP="$COPY_COMMAND"
+    ;;
+esac
+
+LMAP=$( eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME" )
+
+DISCOVER_CMD=$(cat <<EOF
+    set -eu
+    $SUDO $(iscsiadm_session_rescan)
+    $SUDO $(multipath_rescan)
+    # Wait a bit for new mapping
+    COUNTER=1
+    while [ ! -e "$DEV" ] && [ \$COUNTER -le 10 ]; do
+        sleep 1
+        COUNTER=\$((\$COUNTER + 1))
+    done
+    if [ ! -e "$DEV" ]; then
+        # Last chance to get our mapping
+        $SUDO $(multipath_rescan)
+        COUNTER=1
+        while [ ! -e "$DEV" ] && [ \$COUNTER -le 10 ]; do
+            sleep 1
+            COUNTER=\$((\$COUNTER + 1))
+        done
+    fi
+    # Exit with error if mapping does not exist
+    if [ ! -e "$DEV" ]; then
+        exit 1
+    fi
+    DM_HOLDER=dm-\$($SUDO dmsetup info -c --noheadings "$DEV" | $AWK -F: '{print \$3}')
+    DM_SLAVE=\$(ls /sys/block/\${DM_HOLDER}/slaves)
+    # Wait a bit for mapping's paths
+    COUNTER=1
+    while [ ! "\${DM_SLAVE}" ] && [ \$COUNTER -le 10 ]; do
+        sleep 1
+        COUNTER=\$((\$COUNTER + 1))
+    done
+    # Exit with error if mapping has no path
+    if [ ! "\${DM_SLAVE}" ]; then
+        exit 1
+    fi
+EOF
+)
+
+ssh_exec_and_log "$DST_HOST" "$DISCOVER_CMD" \
+    "Error registering $DST_HOST:$DEV"
+
+multiline_exec_and_log "set -o pipefail; $DUMP | $SSH $DST_HOST $DD of=$DEV bs=64k conv=nocreat" \
+    "Error dumping $IMAGE_PATH to ${DST_HOST}:${DEV}"
+
+#log "Unmapping $VVOL_NAME from $DST_HOST"
+FLUSH_CMD=$(cat <<EOF
+    set -eu
+    DM_HOLDER=dm-\$($SUDO dmsetup info -c --noheadings /dev/mapper/${MAP_NAME} | $AWK -F: '{print \$3}')
+    DM_SLAVE=\$(ls /sys/block/\${DM_HOLDER}/slaves)
+
+    $SUDO $(multipath_flush "$MAP_NAME")
+
+    unset device 
+    for device in \${DM_SLAVE}
+    do 
+        $SUDO blockdev --flushbufs /dev/\${device}
+        echo 1 | $SUDO tee /sys/block/\${device}/device/delete
+    done
+EOF
+)
+
+ssh_exec_and_log "$DST_HOST" "$FLUSH_CMD" \
+    "Error flushing out mapping"
+L_UNMAP=$( eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME" )
+ssh_exec_and_log "$DST_HOST" "$SUDO $(iscsiadm_session_rescan)" \
+    "Error rescanning session(s) on $DST_HOST"
+
+
+echo "${VVOL_NAME}:${VVOL_UID}"

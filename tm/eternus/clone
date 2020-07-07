@@ -1,0 +1,10 @@
+
+
+
+# orig lun mappen (falls noetig?)
+# target lun anlegen
+# ddcp von orig lun auf target lun
+# target lun flush
+# target lun unmap
+# orig lun unmap (falls noetig?)
+

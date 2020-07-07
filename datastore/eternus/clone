@@ -68,7 +68,7 @@ eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME_SRC"
 eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME"
 
 CLONE_CMD=$(cat <<EOF
-    set -e
+    set -eu
     $SUDO $(iscsiadm_session_rescan)
     $SUDO $(multipath_rescan)
     COUNTER=1
