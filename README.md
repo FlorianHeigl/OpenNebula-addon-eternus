@@ -62,10 +62,36 @@ A install.sh is provided (you might need to update the source path in it)
 
 Make *modifications* to `/etc/one/oned.conf`:
 
-* DS_MAD
+* DATASTORE_MAD
+
+```DATASTORE_MAD = [
+    EXECUTABLE = "one_datastore",
+    ARGUMENTS  = "-t 15 -d dummy,fs,lvm,ceph,dev,iscsi_libvirt,vcenter,eternus -s shared,ssh,ceph,fs_lvm,q
+cow2,vcenter"
+]```
+
 * DS_MAD_CONF
+
+```DS_MAD_CONF = [
+    NAME = "eternus", REQUIRED_ATTRS = "DISK_TYPE,BRIDGE_LIST,ARRAY_NAME,ARRAY_MGMT_IP,ARRAY_POOL_NAME",
+    PERSISTENT_ONLY = "NO"
+]```
+
 * TM_MAD
+
+```TM_MAD = [
+    EXECUTABLE = "one_tm",
+    ARGUMENTS = "-t 15 -d dummy,lvm,shared,fs_lvm,qcow2,ssh,ceph,dev,vcenter,iscsi_libvirt,eternus"
+]```
+
 * TM_MAD_CONF
+
+```TM_MAD_CONF = [
+    NAME = "eternus", LN_TARGET = "NONE", CLONE_TARGET = "SELF", SHARED = "YES", 
+    ALLOW_ORPHANS = "YES", TM_MAD_SYSTEM = "ssh", LN_TARGET_SSH = "SYSTEM",
+    CLONE_TARGET_SSH = "SYSTEM",  DISK_TYPE_SSH = "FILE", DS_MIGRATE = "NO",  
+    DRIVER = "raw", CLONE_TARGET_SHARED = "SELF", DISK_TYPE_SHARED = "block"
+]```
 
 Restart the OpenNebula core to load the new drivers.
 
