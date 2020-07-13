@@ -1,7 +1,10 @@
 #!/bin/bash
 
 # -------------------------------------------------------------------------- #
-# Copyright 2014, Laurent Grawet <dev@grawet.be>                             #
+# Copyright 2019, FeldHost™ (feldhost.net)                                   #
+#                                                                            #
+# Portions copyright 2014-2016, Laurent Grawet <dev@grawet.be>               #
+# Portions copyright OpenNebula Project (OpenNebula.org), CG12 Labs          #
 #                                                                            #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may    #
 # not use this file except in compliance with the License. You may obtain    #
@@ -14,7 +17,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.   #
 # See the License for the specific language governing permissions and        #
 # limitations under the License.                                             #
-#--------------------------------------------------------------------------- #
+# -------------------------------------------------------------------------- #
+
+###############################################################################
+# This script is used to remove the either system datastore’s directory of the VM or a disk itself 
+###############################################################################
 
 # DELETE <host:remote_system_ds/disk.i|host:remote_system_ds/> vmid dsid
 #   - host is the target host to deploy the VM
@@ -22,11 +29,7 @@
 #   - vmid is the id of the VM
 #   - dsid is the target datastore (0 is the system datastore)
 
-DST=$1
-
-VMID=$2
-DSID=$3
-
+# ------------ Set up the environment to source common tools ------------
 
 if [ -z "${ONE_LOCATION}" ]; then
     TMCOMMON=/var/lib/one/remotes/tm/tm_common.sh
@@ -34,131 +37,188 @@ else
     TMCOMMON=$ONE_LOCATION/var/remotes/tm/tm_common.sh
 fi
 
-DRV_PATH=$(dirname  "$0")
-DRV_TASK=$(basename "$0")
+. $TMCOMMON
 
-# source opennebula tools and eternus scripts
-for lib in ${TMCOMMON} ${DRV_PATH}/../../datastore/eternus/scripts_eternus.sh ; do
-    bash -eun "$lib" && source "$lib" || { echo "Error: failed to set up driver"; exit 1; }
-done
+DRIVER_PATH=$(dirname $0)
 
-DST_PATH=$( arg_path "$DST" )
-DST_HOST=$( arg_host "$DST" )
+source ${DRIVER_PATH}/../../etc/datastore/eternus/eternus.conf
+. ${DRIVER_PATH}/../../datastore/eternus/scripts_eternus.sh
 
-# parse XML Data from stdin
-XPATH="${DRV_PATH}/../../datastore/xpath.rb --stdin"
-test -x "${XPATH}" || { echo "Xpath not found"; exit 1; }
+# -------- Get delete and datastore arguments from OpenNebula core ------------
 
-##
+DST=$1
 
-unset i XPATH_ELEMENTS
+VMID=$2
+DSID=$3
 
-while IFS= read -r -d '' element; do
-    XPATH_ELEMENTS[i++]="$element"
-done < <(onedatastore show -x $DSID| $XPATH \
-                    /DATASTORE/TEMPLATE/ARRAY_MGMT_IP \
-                    /DATASTORE/TEMPLATE/DEBUG
-        )
+DST_PATH=`arg_path $DST`
+DST_HOST=`arg_host $DST`
 
-ARRAY_MGMT_IP=${XPATH_ELEMENTS[0]}
-DEBUG=${XPATH_ELEMENTS[1]:-NO}
+#FIXME: this is hardcoded for today
+ARRAY_POOL_NAME=POOL-NAME
+ARRAY_MGMT_IP=192.168.12.34
 
+#-------------------------------------------------------------------------------
+# Return if deleting a disk, we will delete them when removing the
+# remote_system_ds directory for the VM (remotely)
+#-------------------------------------------------------------------------------
 
-DRV_TASK=delete
+DRV_TASK=tm-delete
+DEBUG=YES
 if [[ $DEBUG = "YES" ]]; then
-    echo "${*}" > /var/tmp/one/eternus-"${DRV_TASK}".params
+    #set -x
+    echo "$DRV_ACTION" > /var/tmp/one/eternus-"${DRV_TASK}".params
     exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
-
-echo "DST=$1
+    echo "DST=$1
 VMID=$2
 DSID=$3"
-
 fi
+
+
+log "Deleting $DST_PATH"
+
+delete_file=$(cat <<EOF
+[ -e "$DST_PATH" ] || exit 0
+
+times=10
+function="rm -rf $DST_PATH"
+
+count=1
+
+ret=\$(\$function)
+error=\$?
+
+while [ \$count -lt \$times -a "\$error" != "0" ]; do
+    sleep 1
+    count=\$(( \$count + 1 ))
+    ret=\$(\$function)
+    error=\$?
+done
+
+[ "x\$error" = "x0" ]
+EOF
+)
+
+ssh_exec_and_log $DST_HOST "$delete_file" "Error deleting $DST_PATH"
 
 #-------------------------------------------------------------------------------
 # Get image information
 #-------------------------------------------------------------------------------
 
-DISK_ID=$(echo "$DST_PATH" | $AWK -F. '{print $NF}')
+DISK_ID=$(echo "$DST_PATH" | $AWK -F. '$NF!=$0 {print $NF}')
+
+# exit if no disk, just deleting system_ds directory
+[ -z "$DISK_ID" ] && exit 0
+
+XPATH="${DRIVER_PATH}/../../datastore/xpath.rb --stdin"
 
 unset i XPATH_ELEMENTS
 
 while IFS= read -r -d '' element; do
     XPATH_ELEMENTS[i++]="$element"
-done < <(onevm show -x "$VMID"| "$XPATH" \
+done < <(onevm show -x $VMID| $XPATH \
                     /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/SOURCE \
-                    /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/PERSISTENT)
+                    /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/PERSISTENT \
+                    /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/CLONE \
+                    /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/DISK_TYPE \
+                    /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/IMAGE_ID \
+                    /VM/HISTORY_RECORDS/HISTORY[last\(\)]/DS_ID)
 
-IMAGE_PATH="${XPATH_ELEMENTS[0]}"
+NAME_WWN="${XPATH_ELEMENTS[0]}"
 PERSISTENT="${XPATH_ELEMENTS[1]}"
-echo "$IMAGE_PATH"
+CLONE="${XPATH_ELEMENTS[2]}"
+DISK_TYPE="${XPATH_ELEMENTS[3]}"
+IMAGE_ID="${XPATH_ELEMENTS[4]}"
+SYS_DSID="${XPATH_ELEMENTS[5]}"
 
-#VVOL_NAME=${IMAGE_PATH%:*}
-#VVOL_UID=${IMAGE_PATH#*:}
+# Exit if persistent
+[ "$PERSISTENT" == "YES" ] && exit 0
 
-#-------------------------------------------------------------------------------
-# Remove directory if dst_path is a directory
-#-------------------------------------------------------------------------------
+# Not persistent and not clone, so this disk can be used by more VMs at the same time
+if [ "$CLONE" == "NO" ] && [ "$DISK_TYPE" == "BLOCK" ]; then
+    # check if disk is in use by other VMs
+    unset i XPATH_ELEMENTS
 
-if [ "$( is_disk "$DST_PATH" )" -eq 0 ]; then
-    # Directory
-    log "Deleting $DST_PATH"
-    ssh_exec_and_log "$DST_HOST" "set -u ; rm -rf $DST_PATH" "Error deleting $DST_PATH"
-    exit 0
+    while IFS= read -r -d '' element; do
+        XPATH_ELEMENTS[i++]="$element"
+    done < <(oneimage show -x $IMAGE_ID| $XPATH /IMAGE/RUNNING_VMS)
+
+    RUNNING_VMS="${XPATH_ELEMENTS[0]}"
+
+    # image is used, so exit
+    [ "$RUNNING_VMS" != "1" ] && exit 0
 fi
 
 #-------------------------------------------------------------------------------
-# Flush iSCSI device on hypervisor
+# Get image ds information
 #-------------------------------------------------------------------------------
 
-MAP_NAME=$(eternus_ssh_monitor_and_log "$DST_HOST" "readlink $DST_PATH" | grep -o '3.*$')
-VVOL_UID=${MAP_NAME#3}
 
-VVOL_NAME=$(eternus_get_vvol_name ${VVOL_UID} ${ARRAY_MGMT_IP})
 
-FLUSH_CMD=$(cat <<EOF
-        set -eu
-        DM_HOLDER=dm-\$($SUDO dmsetup info -c --noheadings /dev/mapper/${MAP_NAME} | $AWK -F: '{print \$3}')
-        DM_SLAVE=\$(ls /sys/block/\${DM_HOLDER}/slaves)
+# if clone or volatile = non-persistent disk, get right name and wwn
+if [ "$CLONE" == "YES" ] || [ "$DISK_TYPE" == "FILE" ]; then
+    #-------------------------------------------------------------------------------
+    # Get system ds information
+    #-------------------------------------------------------------------------------
 
-        $SUDO $(multipath_flush "$MAP_NAME")
 
-        unset device 
-        for device in \${DM_SLAVE}
-        do 
-            $SUDO blockdev --flushbufs /dev/\${device}
-            echo 1 | $SUDO tee /sys/block/\${device}/device/delete
-        done
+    # get VM disk WWN
+    #NAME_WWN=$(python ${DRIVER_PATH}/../../datastore/eternus/eternus.py getVmClone -a $API_ENDPOINT -i $IP -s $SECURE -u $USERNAME \
+    #                                                            -p $PASSWORD -nt $NAMING_TYPE -vi $VMID -id $DISK_ID)
+    NAME=one-${IMAGE_ID}-${VMID}-${DISK_ID}
+
+
+    if [ $? -ne 0 ]; then
+      error_message "$NAME_WWN"
+      exit 1
+    fi
+fi
+
+# wwn aus der eternus holen
+WWN=$( eternus_get_vvol_uid $NAME $ARRAY_MGMT_IP )
+
+#NAME=$(get_vv_name "$NAME_WWN")
+#WWN=$(get_vv_wwn "$NAME_WWN")
+
+# Check if DST host is 3PAR host, so compute node
+#DST_HOST_3PAR=$(python ${DRIVER_PATH}/../../datastore/eternus/eternus.py hostExists -a $API_ENDPOINT -i $IP -s $SECURE -u $USERNAME \
+#                                                                        -p $PASSWORD -hs $DST_HOST)
+# always assuming yes for this.
+
+# if compute node, flush and unmap drive
+  #-------------------------------------------------------------------------------
+  # Unmap non-persistent image from host
+  #-------------------------------------------------------------------------------
+  
+  FLUSH_CMD=$(cat <<EOF
+      set -e
+      $(remove_lun "$WWN")
 EOF
 )
+  
+  log "Unmapping $NAME_WWN from $DST_HOST"
+  
+  ssh_exec_and_log "$DST_HOST" "$FLUSH_CMD" \
+      "Error flushing out mapping"
+  
+  #python ${DRIVER_PATH}/../../datastore/eternus/eternus.py unexportVV -a $API_ENDPOINT -i $IP -s $SECURE -u $USERNAME -p $PASSWORD \
+  #                                                      -n $NAME -hs $DST_HOST
+  UNMAP=$( eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$NAME" )
 
-ssh_exec_and_log "$DST_HOST" "$FLUSH_CMD" \
-    "Error flushing out mapping"
+
+  if [ $? -ne 0 ]; then
+    error_message "Error unexporting VV"
+    exit 1
+  fi
+
+# Exit if not clone and not volatile
+[ "$CLONE" == "NO" ] && [ "$DISK_TYPE" == "BLOCK" ] && exit 0
 
 #-------------------------------------------------------------------------------
-# Unmap iSCSI volume on SAN
+# Delete non-persistent image copy
 #-------------------------------------------------------------------------------
 
-log "Unmapping $DST_HOST:$VVOL_NAME"
-eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME"
-ssh_exec_and_log "$DST_HOST" "$SUDO $(iscsiadm_session_rescan)" \
-    "Error rescanning iscsi sessions on $DST_HOST"
-
-if [ "$PERSISTENT" = "YES" ]; then
-    exit 0
-fi
-
-#-------------------------------------------------------------------------------
-# Remove volume if dst_path is not persistent (check again with volume name)
-#-------------------------------------------------------------------------------
-
-VVOL_TYPE=$(echo $VVOL_NAME | awk -F\- '{printf "%s", $3}; $3=="aux" {printf "-%s", $4}')
-
-if [ "$VVOL_TYPE" = "snapshot" ]; then
-
-    log "Removing copy $ARRAY_MGMT_IP:$VVOL_NAME"
-    eternus_ssh_exec_and_log "$ARRAY_MGMT_IP" "set -e ; echo "deleting not implemeneted: ${VVOL_NAME}"; exit 1" \
-        "Error removing $ARRAY_MGMT_IP:$VVOL_NAME"
-fi
-
-exit 0
+#python ${DRIVER_PATH}/../../datastore/eternus/eternus.py deleteVmClone -a $API_ENDPOINT -i $IP -s $SECURE -u $USERNAME -p $PASSWORD \
+#                                                            -nt $NAMING_TYPE -vi $VMID -id $DISK_ID
+eternus_ssh_exec_and_log "$ARRAY_MGMT_IP" "delete volume -volume-name ${NAME}" \
+     "Error removing $ARRAY_MGMT_IP:$NAME"

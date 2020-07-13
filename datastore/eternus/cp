@@ -59,14 +59,14 @@ DST_HOST=$( get_destination_host "$ID" )
 
 set_up_datastore "$BASE_PATH" "$RESTRICTED_DIRS" "$SAFE_DIRS" "$UMASK"
 
+IMAGE_HASH=`generate_image_hash`
+TMP_DST="$STAGING_DIR/$IMAGE_HASH"
+
+
 VVOL_NAME="one-${ID}"
 #IQN="$BASE_IQN:2545.`echo $ARRAY_MGMT_IP | awk -F'.' '{print $1}'`.node1.$VVOL_NAME"
 
 
-# was ist das fuer ein schrecklicher code. neu machen!
-#REGISTER_CMD="set -eu ; svctask mkvvol ${AUTOEXPAND} -cache readwrite -copies ${COPIES} \
-#    ${GRAINSIZE_PAR} -iogrp ${IO_GROUP} -mdiskgrp ${MDISK_GROUP} -name ${VVOL_NAME} \
-#    ${RSIZE_PAR} -size ${SIZE} -syncrate ${SYNC_RATE} -unit mb -vtype ${VTYPE}"
 
 #PHASE: RUN
 
@@ -104,6 +104,10 @@ http://*|https://*)
     DUMP="$COPY_COMMAND"
     ;;
 esac
+
+multiline_exec_and_log "set -e -o pipefail; $DUMP | $SSH $DST_HOST $DD of=$TMP_DST bs=${DD_BLOCK_SIZE:-64k}" \
+             "Error dumping $SRC to $DST_HOST:$TMP_DST"
+
 
 LMAP=$( eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME" )
 
@@ -148,8 +152,30 @@ EOF
 ssh_exec_and_log "$DST_HOST" "$DISCOVER_CMD" \
     "Error registering $DST_HOST:$DEV"
 
-multiline_exec_and_log "set -o pipefail; $DUMP | $SSH $DST_HOST $DD of=$DEV bs=64k conv=nocreat" \
+# copy image
+REGISTER_CMD=$(cat <<EOF
+    set -e -u -o pipefail
+
+    FORMAT=\$(qemu-img info $TMP_DST | grep "^file format:" | awk '{print \$3}' || :)
+
+    if [ "\$FORMAT" != "raw" ]; then
+        qemu-img convert -O raw $TMP_DST $DEV
+    else
+        dd if=$TMP_DST of=$DEV bs=${DD_BLOCK_SIZE:-64k}
+    fi
+
+    # remove original
+    rm -f $TMP_DST
+EOF
+)
+
+
+ssh_exec_and_log "$DST_HOST" "$REGISTER_CMD" \
     "Error dumping $IMAGE_PATH to ${DST_HOST}:${DEV}"
+
+
+
+#multiline_exec_and_log "set -o pipefail; $DUMP | $SSH $DST_HOST $DD of=$DEV bs=64k conv=nocreat" \
 
 #log "Unmapping $VVOL_NAME from $DST_HOST"
 FLUSH_CMD=$(cat <<EOF

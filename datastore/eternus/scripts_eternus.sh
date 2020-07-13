@@ -37,19 +37,13 @@ FLOCK_FD=204
 # Use ddpt instead of dd to speed up data transferts using sparse copy
 USE_DDPT=1
 
-#BLOCKDEV=blockdev
 DDPT=ddpt
-#DMSETUP=dmsetup
-#FIND=find
 FLOCK=flock
-#HEAD=head
 MULTIPATH=multipath
-#OD=od
-#TEE=tee
 
 # must be extended to include all possible driver data
 function get_xpath_info() {
-XPATH="${DRV_PATH}/../xpath.rb -b $DRV_ACTION"
+XPATH="${DRV_PATH}/../../datastore/xpath.rb -b $DRV_ACTION"
 
 unset i XPATH_ELEMENTS
 
@@ -69,7 +63,10 @@ done < <($XPATH     /DS_DRIVER_ACTION_DATA/DATASTORE/BASE_PATH \
                     /DS_DRIVER_ACTION_DATA/IMAGE/SOURCE \
                     /DS_DRIVER_ACTION_DATA/IMAGE/PATH \
                     /DS_DRIVER_ACTION_DATA/IMAGE/TEMPLATE/MD5 \
-                    /DS_DRIVER_ACTION_DATA/IMAGE/TEMPLATE/SHA1)
+                    /DS_DRIVER_ACTION_DATA/IMAGE/TEMPLATE/SHA1 \
+                    /DS_DRIVER_ACTION_DATA/DATASTORE/TEMPLATE/STAGING_DIR )
+
+
                     
 BASE_PATH="${XPATH_ELEMENTS[0]}"
 RESTRICTED_DIRS="${XPATH_ELEMENTS[1]}"
@@ -86,8 +83,9 @@ SOURCE="${XPATH_ELEMENTS[11]}"
 IMAGE_PATH="${XPATH_ELEMENTS[12]}"
 MD5="${XPATH_ELEMENTS[13]}"
 SHA1="${XPATH_ELEMENTS[14]}"
+STAGING_DIR="${XPATH_ELEMENTS[15]:-/var/tmp}"
 
-export BASE_PATH RESTRICTED_DIRS SAFE_DIRS UMASK BRIDGE_LIST FSTYPE SIZE NAME SOURCE IMAGE_PATH MD5 SHA1
+export BASE_PATH RESTRICTED_DIRS SAFE_DIRS UMASK BRIDGE_LIST FSTYPE SIZE NAME SOURCE IMAGE_PATH MD5 SHA1 STAGING_DIR
 export DEBUG
 export ARRAY_MGMT_IP ARRAY_POOL_NAME
 
@@ -163,7 +161,7 @@ function eternus_get_vvol_uid {
 # ex:     3 one-3                            Available                 TPV               OFF        -                     -    0 RAIDGRP-1              - -                    20480              - Disable    Default   Thin       600000E00ABC0000002C13F800030000 Default  Follow Host Response          
 
     VVOL_UID=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
-         "show volumes -mode detail" | grep "${ARRAY_POOL_NAME}" | grep -w "${VVOL_NAME}" | awk '{print tolower($17)}' )
+         "show volumes -mode detail" | grep "${ARRAY_POOL_NAME}" | grep -E "(${VVOL_NAME}\s)" | awk '{print tolower($17)}' )
     if [ -n "$VVOL_UID" ]; then
         echo "$VVOL_UID"
         exit $STATUS
@@ -201,7 +199,7 @@ function eternus_get_vvol_size {
     ARRAY_MGMT_IP="$2"
     STATUS=0
     VVOL_SIZE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
-        "show volumes -mode detail" | grep "${ARRAY_POOL_NAME}" | grep -w "${VVOL_NAME}" | awk '{print ($12)}' )
+        "show volumes -mode detail" | grep "${ARRAY_POOL_NAME}" | grep -E "(${VVOL_NAME}\s)" | awk '{print ($12)}' )
     if [ -n "$VVOL_SIZE" ]; then
         echo "$VVOL_SIZE"
         exit $STATUS
@@ -213,18 +211,6 @@ function eternus_get_vvol_size {
     fi
 }
 
-# REMOVE (used in ds/rm, tm/elete, tm/mvds)
-#function eternus_lsvvoldependentmaps {
-#    local VVOL_NAME ARRAY_MGMT_IP i
-#    local -a FCMAP
-#    VVOL_NAME="$1"
-#    ARRAY_MGMT_IP="$2"
-#
-#    while IFS= read -r line; do
-#        FCMAP[i++]="$line"
-#    done < <(eternus_ssh_monitor_and_log $ARRAY_MGMT_IP "lsfcmap -nohdr -delim : -filtervalue source_vvol_name=$VVOL_NAME")
-#    echo "${FCMAP[@]}"
-#}
 
 # TEST: OK
 # BUG: what if already mapped?
@@ -233,10 +219,16 @@ function eternus_map {
     ARRAY_MGMT_IP="$1"
     HOST="$2"
     VVOL="$3"
-    # TODO: get this list and then check if lun is already mapped! if yes, just return!
     # get list of mapped luns in our lun group
     FREE_LUN_CMD="$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
-        "show lun-group -lg-name OPENNEBULA" | awk '$1 ~ /^[0-9]/ { print $1}' )"
+        "show lun-group -lg-name OPENNEBULA" | awk '$1 ~ /^[0-9]/ { print $1" "$3}' )"
+    
+    # take this list and then check if lun is already mapped! if yes, just return!
+    if TEST_LUN_MAPPED=$( echo "$FREE_LUN_CMD" | grep -E "(${VVOL}$)" ); then
+        LUN_ID=$( echo "$TEST_LUN_MAPPED" | awk '{print $1}' )
+        echo "$LUN_ID"
+        return 0
+    fi
 
     # find first unused LUN ID
     FREE_LUN=$( for i in {0..255} ; do if [[ ! "${FREE_LUN_CMD[*]}" =~ $i ]] ; then echo "${i}" ; break ; fi ; done )
@@ -248,6 +240,8 @@ function eternus_map {
     else
         "Error mapping vvol $VVOL to $HOST"
     fi
+    echo "$FREE_LUN"
+    return 0
 }
 
 # TEST: OK
@@ -283,7 +277,7 @@ function eternus_unmap {
 
 # UNUSED
 function iscsiadm_session_rescan {
-    echo "$ISCSIADM -m session --rescan"
+    echo "iscsiadm -m session --rescan"
     sleep 2
 }
 
@@ -291,12 +285,12 @@ function iscsiadm_session_rescan {
 function multipath_flush {
     local MAP_NAME
     MAP_NAME="$1"
-    echo "$MULTIPATH -f $MAP_NAME"
+    echo "sudo multipath -f $MAP_NAME"
 }
 
 # TEST
 function multipath_rescan {
-    echo "$MULTIPATH"
+    echo "sudo multipath"
     sleep 4
 }
 
@@ -317,8 +311,109 @@ function clone_command {
     IF="$1"
     OF="$2"
     if [ $USE_DDPT -eq 1 ]; then
-        "$DDPT if=$IF of=$OF bs=512 bpt=128 oflag=sparse"
+        echo "$DDPT if=$IF of=$OF bs=512 bpt=128 oflag=sparse"
     else
-        "$DD if=$IF of=$OF bs=64k conv=nocreat"
+        echo "$DD if=$IF of=$OF bs=64k conv=nocreat"
     fi
 }
+
+function rescan_scsi_bus {
+  local LUN
+  local FORCE
+  LUN="$1"
+  [ "$2" == "force" ] && FORCE=" --forcerescan"
+  echo "HOSTS=\$(cat /proc/scsi/scsi | awk -v RS=\"Type:\" '\$0 ~ \"Model: ETERNUS_DXL\" {print \$0}' |grep -Po \"scsi[0-9]+\"|grep -Eo \"[0-9]+\" |sort|uniq|paste -sd \",\" -)"
+  #rescan-scsi-bus hat einen bug, manuell updaten
+  echo "$SUDO /usr/bin/rescan-scsi-bus.sh --hosts=\$HOSTS -m -s -a -r -u -f --sparselun  --nooptscan $FORCE"
+  #echo "for _scan in /sys/class/scsi_host/host_*/scan ; do echo \"- - -\" | sudo tee \$_scan ; done"
+}
+
+function get_vv_name {
+  local NAME_WWN
+  NAME_WWN="$1"
+  echo "$NAME_WWN" | awk -F: '{print $1}'
+}
+
+function get_vv_wwn {
+  local NAME_WWN
+  NAME_WWN="$1"
+  echo "$NAME_WWN" | awk -F: '{print $2}'
+}
+
+function discover_lun {
+    local LUN
+    local WWN
+    LUN="$1"
+    WWN="$2"
+    cat <<EOF
+        sudo iscsiadm -m session --rescan
+        sleep 2
+        $(rescan_scsi_bus "$LUN")
+        sleep 2
+        $(multipath_rescan)
+
+        DEV="/dev/mapper/3$WWN"
+
+        # Wait a bit for new mapping
+        COUNTER=1
+        while [ ! -e \$DEV ] && [ \$COUNTER -le 10 ]; do
+            sleep 1
+            COUNTER=\$((\$COUNTER + 1))
+        done
+        if [ ! -e \$DEV ]; then
+            # Last chance to get our mapping
+            $(multipath_rescan)
+            COUNTER=1
+            while [ ! -e "\$DEV" ] && [ \$COUNTER -le 10 ]; do
+                sleep 1
+                COUNTER=\$((\$COUNTER + 1))
+            done
+        fi
+        # Exit with error if mapping does not exist
+        if [ ! -e \$DEV ]; then
+            echo "multipath device does not exist"
+            exit 1
+        fi
+
+        DM_HOLDER=\$($SUDO dmsetup ls -o blkdevname | grep -Po "(?<=3$WWN\s\()[^)]+")
+        DM_SLAVE=\$(ls /sys/block/\${DM_HOLDER}/slaves)
+        # Wait a bit for mapping's paths
+        COUNTER=1
+        while [ ! "\${DM_SLAVE}" ] && [ \$COUNTER -le 10 ]; do
+            sleep 1
+            COUNTER=\$((\$COUNTER + 1))
+        done
+        # Exit with error if mapping has no path
+        if [ ! "\${DM_SLAVE}" ]; then
+            echo "multipath slave does not exist"
+            exit 1
+        fi
+EOF
+}
+
+function remove_lun {
+    local WWN
+    WWN="$1"
+    cat <<EOF
+      DEV="/dev/mapper/3$WWN"
+      # if the mpath device is gone, just exit
+      if ! [ -b $DEV ]; then
+          #$SUDO /usr/bin/rescan-scsi-bus.sh -r -m
+          exit 0
+      fi
+      DM_HOLDER=\$($SUDO dmsetup ls -o blkdevname | grep -Po "(?<=3$WWN\s\()[^)]+")
+      DM_SLAVE=\$(ls /sys/block/\${DM_HOLDER}/slaves)
+
+      $(multipath_flush "\$DEV")
+
+      unset device
+      for device in \${DM_SLAVE}
+      do
+          if [ -e /dev/\${device} ]; then
+              $SUDO blockdev --flushbufs /dev/\${device}
+              echo 1 | $SUDO tee /sys/block/\${device}/device/delete
+          fi
+      done
+EOF
+}
+

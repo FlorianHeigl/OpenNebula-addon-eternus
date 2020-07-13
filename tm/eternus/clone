@@ -1,10 +1,185 @@
+#!/bin/bash
+
+# -------------------------------------------------------------------------- #
+# Copyright 2019, FeldHost™ (feldhost.net)                                   #
+#                                                                            #
+# Portions copyright 2014-2016, Laurent Grawet <dev@grawet.be>               #
+# Portions copyright OpenNebula Project (OpenNebula.org), CG12 Labs          #
+#                                                                            #
+# Licensed under the Apache License, Version 2.0 (the "License"); you may    #
+# not use this file except in compliance with the License. You may obtain    #
+# a copy of the License at                                                   #
+#                                                                            #
+# http://www.apache.org/licenses/LICENSE-2.0                                 #
+#                                                                            #
+# Unless required by applicable law or agreed to in writing, software        #
+# distributed under the License is distributed on an "AS IS" BASIS,          #
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.   #
+# See the License for the specific language governing permissions and        #
+# limitations under the License.                                             #
+# -------------------------------------------------------------------------- #
+
+###############################################################################
+# This script is used to clone the image from the datastore (non-persistent images)
+###############################################################################
+
+#clone: clones the image from the datastore (non-persistent images)
+#ARGUMENTS: fe:SOURCE host:remote_system_ds/disk.i vm_id ds_id
+
+# clone fe:SOURCE host:remote_system_ds/disk.i vmid dsid
+#   - fe is the front-end hostname
+#   - SOURCE is the path of the disk image in the form DS_BASE_PATH/disk
+#   - host is the target host to deploy the VM
+#   - remote_system_ds is the path for the system datastore in the host
+#   - vmid is the id of the VM
+#   - dsid is the target datastore (0 is the system datastore)
+
+# ------------ Set up the environment to source common tools ------------
+
+if [ -z "${ONE_LOCATION}" ]; then
+    LIB_LOCATION=/usr/lib/one
+else
+    LIB_LOCATION=$ONE_LOCATION/lib
+fi
+
+if [ -z "${ONE_LOCATION}" ]; then
+    TMCOMMON=/var/lib/one/remotes/tm/tm_common.sh
+else
+    TMCOMMON=$ONE_LOCATION/var/remotes/tm/tm_common.sh
+fi
+
+. $TMCOMMON
+
+DRV_PATH=$(dirname $0)
+
+. ${DRV_PATH}/../../datastore/eternus/scripts_eternus.sh
+
+# -------- Get clone and datastore arguments from OpenNebula core ------------
+
+SRC=$1
+DST=$2
+
+VMID=$3
+DSID=$4
+
+SRC_VVOL_NAME=${SRC%:*}
+SRC_VVOL_UID=${SRC#*:}
+
+DST_PATH=`arg_path $DST`
+DST_HOST=`arg_host $DST`
+DST_DIR=`dirname $DST_PATH`
+
+#get_xpath_info
+
+#XPATH="${DRV_PATH}/../../datastore/xpath.rb --stdin"
+XPATH="$(dirname $0)/../../datastore/xpath.rb --stdin"
 
 
 
-# orig lun mappen (falls noetig?)
-# target lun anlegen
-# ddcp von orig lun auf target lun
-# target lun flush
-# target lun unmap
-# orig lun unmap (falls noetig?)
+#-------------------------------------------------------------------------------
+# Get Image information
+#-------------------------------------------------------------------------------
+
+DISK_ID=$(basename ${DST_PATH} | cut -d. -f2)
+
+unset i j XPATH_ELEMENTS
+
+while IFS= read -r -d '' element; do
+    XPATH_ELEMENTS[i++]="$element"
+done < <(onevm show -x $VMID| $XPATH \
+                    /VM/NAME \
+                    /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/SIZE \
+                    /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/ORIGINAL_SIZE \
+                    /VM/HISTORY_RECORDS/HISTORY[last\(\)]/DS_ID)
+
+VM_NAME="${XPATH_ELEMENTS[j++]}"
+SIZE="${XPATH_ELEMENTS[j++]}"
+ORIGINAL_SIZE="${XPATH_ELEMENTS[j++]}"
+SYS_DSID="${XPATH_ELEMENTS[j++]}"
+
+
+DRV_TASK=tm-clone
+DEBUG=YES
+if [[ $DEBUG = "YES" ]]; then
+    #set -x
+    echo "$DRV_ACTION" > /var/tmp/one/eternus-"${DRV_TASK}".params
+    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
+fi
+#FIXME: this is hardcoded for today
+ARRAY_POOL_NAME=POOL-NAME
+ARRAY_MGMT_IP=192.168.12.34
+
+#-------------------------------------------------------------------------------
+# Start actions
+#-------------------------------------------------------------------------------
+
+#set -u
+
+# generate variables for src vol
+SRC_VVOL_MAP="3${SRC_VVOL_UID}"
+SRC_VVOL_DEV="/dev/mapper/${SRC_VVOL_MAP}"
+
+# create new vvol combining the names and generate variables
+CLONE_VVOL_NAME="${SRC_VVOL_NAME}-${VMID}-${DISK_ID}"
+CLONE_VVOL_CREATE=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
+        "create volume -pool-name ${ARRAY_POOL_NAME} -type tpv -size ${SIZE}mb -name ${CLONE_VVOL_NAME}" )
+CLONE_VVOL_UID=$( eternus_get_vvol_uid "${CLONE_VVOL_NAME}" "${ARRAY_MGMT_IP}" )
+CLONE_VVOL_MAP="3${CLONE_VVOL_UID}"
+CLONE_VVOL_DEV="/dev/mapper/${CLONE_VVOL_MAP}"
+# attach the new clone volume
+if ! MAP_CLONE_VVOL=$( eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$CLONE_VVOL_NAME" );then
+  error_message "CLONE_VVOL_MAPPING: $MAP_CLONE_VVOL"
+  exit 1
+fi
+
+if ! [[ $CLONE_VVOL_UID =~ ^6[0-9a-f]+$ ]]; then
+  error_message "$CLONE_VVOL_CREATE"
+  exit 1
+fi
+
+
+# attach the src volume
+if ! MAP_SRC_VVOL=$( eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$SRC_VVOL_NAME" );then
+  error_message "SRC_VVOL_MAPPING: $MAP_SRC_VVOL"
+  exit 1
+fi
+
+
+ATTACH_SOURCE=$(cat <<EOF
+    set -eu
+    $(discover_lun "$MAP_SRC_VVOL" "$SRC_VVOL_UID")
+EOF
+)
+
+ATTACH_TARGET=$(cat <<EOF
+    set -eu
+    mkdir -p "$DST_DIR"
+    $(discover_lun "$MAP_CLONE_VVOL" "$CLONE_VVOL_UID")
+EOF
+)
+
+# now we need to generate the mpath devices and copy the contents
+CLONE_CMD=$(cat <<EOF
+    set -e
+        echo "cloning content to: $CLONE_VVOL_DEV"
+        $SUDO $(clone_command "$SRC_VVOL_DEV" "$CLONE_VVOL_DEV")
+        echo "setting up symlink: $CLONE_VVOL_DEV $DST_PATH"
+        ln -sf "$CLONE_VVOL_DEV" "$DST_PATH"
+EOF
+)
+
+
+# then we need to create the base path
+ssh_make_path $DST_HOST $DST_DIR
+
+# attach the source lun
+ssh_exec_and_log "$DST_HOST" "$ATTACH_SOURCE" \
+    "Error registering $CLONE_VVOL_UID to $DST_HOST"
+
+# attach the target lun
+ssh_exec_and_log "$DST_HOST" "$ATTACH_SOURCE" \
+    "Error registering $CLONE_VVOL_UID to $DST_HOST"
+
+ssh_exec_and_log "$DST_HOST" "$CLONE_CMD" \
+    "Error registering $CLONE_VVOL_UID to $DST_HOST"
 
