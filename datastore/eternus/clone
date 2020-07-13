@@ -136,6 +136,6 @@ ssh_exec_and_log "$DST_HOST" "$CLONE_CMD" \
 echo "${VVOL_NAME}:${VVOL_UID}" 
 
 # unmap immer ok?
-$( eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME_SRC" ) &&
-$( eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME" ) && exit $?
+#$( eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME_SRC" ) &&
+#$( eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME" ) && exit $?
 
