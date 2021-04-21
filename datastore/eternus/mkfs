@@ -3,6 +3,7 @@
 # OpenNebula driver for Fujitsu Eternus DX series
 # https://github.com/deepthinkag/OpenNebula-addon-eternus/
 # <fhe@deepthink.ag>
+# <me@florianheigl.me>
 
 #PHASE: INIT
 
