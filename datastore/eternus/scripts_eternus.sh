@@ -237,6 +237,7 @@ function eternus_map {
     if [[ -n ${FREE_LUN} ]]; then
         MAP_CMD=$( eternus_ssh_monitor_and_log "${ARRAY_MGMT_IP}" \
             "set lun-group -lg-name OPENNEBULA -volume-name ${VVOL} -lun ${FREE_LUN}" )
+        echo "MAPPING Returned"
     else
         "Error mapping vvol $VVOL to $HOST"
     fi
