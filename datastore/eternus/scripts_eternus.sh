@@ -113,7 +113,7 @@ function eternus_ssh_exec_and_log
 {
     eternus_lock
     local SSH_EXEC_OUT SSH_EXEC_RC
-    SSH_EXEC_OUT=`$SSH -o ConnectTimeout=$CONNECT_TIMEOUT "$1" "$2" 2>&1`
+    SSH_EXEC_OUT=$( $SSH -o ConnectTimeout=$CONNECT_TIMEOUT "$1" "$2" 2>&1 )
     SSH_EXEC_RC=$?
     eternus_unlock
 
@@ -134,7 +134,7 @@ function eternus_ssh_monitor_and_log
 {
     eternus_lock
     local SSH_EXEC_OUT SSH_EXEC_RC
-    SSH_EXEC_OUT=`$SSH -o ConnectTimeout=$CONNECT_TIMEOUT "$1" "$2" 2>&1`
+    SSH_EXEC_OUT=$( $SSH -o ConnectTimeout=$CONNECT_TIMEOUT "$1" "$2" 2>&1 )
     SSH_EXEC_RC=$?
     eternus_unlock
 
