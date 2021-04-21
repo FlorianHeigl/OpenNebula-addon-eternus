@@ -12,4 +12,7 @@ shellcheck:
     - |
       find . -name .git -type d -prune -o -type f  -regex '.*/[^.]*$'   -print0 |
       xargs -0 -P $(nproc) -r -n1 sh -c 'FILE="$0"; if head -n1 "$FILE" |grep -q "^#\\! \?/.\+\(ba|d|k\)\?sh" ; then shellcheck "$FILE" ; else /bin/true ; fi '
+    # we know where to look
+    - |
+      for _f in datastore/eternus/* tm/eternus/* ; do shellcheck "${_f}" ; done
 #mytest
