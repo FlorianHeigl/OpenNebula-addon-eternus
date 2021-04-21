@@ -15,5 +15,5 @@ shellcheck:
     # we know where to look
     - |
       find datastore/eternus/* tm/eternus/* -print0 |
-      xargs -0 -P $(nproc) -r -n1 shellcheck
+      xargs -0 -P $(nproc) -r -n1 shellcheck -e SC2102
 #mytest
