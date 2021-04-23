@@ -54,7 +54,7 @@ unset i XPATH_ELEMENTS
 
 while IFS= read -r -d '' element; do
     XPATH_ELEMENTS[i++]="$element"
-done < <(onedatastore show -x $DSID| $XPATH \
+done < <(onedatastore show -x "$DSID"| "$XPATH" \
                     /DATASTORE/BASE_PATH \
                     /DATASTORE/TEMPLATE/RESTRICTED_DIRS \
                     /DATASTORE/TEMPLATE/SAFE_DIRS \

@@ -37,12 +37,12 @@ else
     TMCOMMON=$ONE_LOCATION/var/remotes/tm/tm_common.sh
 fi
 
-. $TMCOMMON
+. "$TMCOMMON"
 
-DRIVER_PATH=$(dirname $0)
+DRIVER_PATH=$(dirname "$0")
 
-source ${DRIVER_PATH}/../../etc/datastore/eternus/eternus.conf
-. ${DRIVER_PATH}/../../datastore/eternus/scripts_eternus.sh
+source "${DRIVER_PATH}"/../../etc/datastore/eternus/eternus.conf
+. "${DRIVER_PATH}"/../../datastore/eternus/scripts_eternus.sh
 
 # -------- Get delete and datastore arguments from OpenNebula core ------------
 
@@ -51,8 +51,8 @@ DST=$1
 VMID=$2
 DSID=$3
 
-DST_PATH=`arg_path $DST`
-DST_HOST=`arg_host $DST`
+DST_PATH=$( arg_path "$DST" )
+DST_HOST=$( arg_host "$DST" )
 
 #FIXME: this is hardcoded for today
 ARRAY_POOL_NAME=POOL-NAME
@@ -99,7 +99,7 @@ done
 EOF
 )
 
-ssh_exec_and_log $DST_HOST "$delete_file" "Error deleting $DST_PATH"
+ssh_exec_and_log "$DST_HOST" "$delete_file" "Error deleting $DST_PATH"
 
 #-------------------------------------------------------------------------------
 # Get image information
@@ -116,7 +116,7 @@ unset i XPATH_ELEMENTS
 
 while IFS= read -r -d '' element; do
     XPATH_ELEMENTS[i++]="$element"
-done < <(onevm show -x $VMID| $XPATH \
+done < <(onevm show -x "$VMID"| $XPATH \
                     /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/SOURCE \
                     /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/PERSISTENT \
                     /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/CLONE \
@@ -141,7 +141,7 @@ if [ "$CLONE" == "NO" ] && [ "$DISK_TYPE" == "BLOCK" ]; then
 
     while IFS= read -r -d '' element; do
         XPATH_ELEMENTS[i++]="$element"
-    done < <(oneimage show -x $IMAGE_ID| $XPATH /IMAGE/RUNNING_VMS)
+    done < <(oneimage show -x "$IMAGE_ID"| $XPATH /IMAGE/RUNNING_VMS)
 
     RUNNING_VMS="${XPATH_ELEMENTS[0]}"
 
@@ -165,17 +165,14 @@ if [ "$CLONE" == "YES" ] || [ "$DISK_TYPE" == "FILE" ]; then
     # get VM disk WWN
     #NAME_WWN=$(python ${DRIVER_PATH}/../../datastore/eternus/eternus.py getVmClone -a $API_ENDPOINT -i $IP -s $SECURE -u $USERNAME \
     #                                                            -p $PASSWORD -nt $NAMING_TYPE -vi $VMID -id $DISK_ID)
-    NAME=one-${IMAGE_ID}-${VMID}-${DISK_ID}
-
-
-    if [ $? -ne 0 ]; then
+    if ! NAME=one-${IMAGE_ID}-${VMID}-${DISK_ID} ; then
       error_message "$NAME_WWN"
       exit 1
     fi
 fi
 
 # wwn aus der eternus holen
-WWN=$( eternus_get_vvol_uid $NAME $ARRAY_MGMT_IP )
+WWN=$( eternus_get_vvol_uid "$NAME" "$ARRAY_MGMT_IP" )
 
 #NAME=$(get_vv_name "$NAME_WWN")
 #WWN=$(get_vv_wwn "$NAME_WWN")
@@ -203,10 +200,7 @@ EOF
   
   #python ${DRIVER_PATH}/../../datastore/eternus/eternus.py unexportVV -a $API_ENDPOINT -i $IP -s $SECURE -u $USERNAME -p $PASSWORD \
   #                                                      -n $NAME -hs $DST_HOST
-  UNMAP=$( eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$NAME" )
-
-
-  if [ $? -ne 0 ]; then
+  if ! UNMAP=$( eternus_unmap "$ARRAY_MGMT_IP" "$DST_HOST" "$NAME" ) ; then
     error_message "Error unexporting VV"
     exit 1
   fi
