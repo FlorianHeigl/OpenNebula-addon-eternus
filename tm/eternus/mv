@@ -35,26 +35,26 @@ else
     TMCOMMON=$ONE_LOCATION/var/remotes/tm/tm_common.sh
 fi
 
-. $TMCOMMON
+. "$TMCOMMON"
 
-DRIVER_PATH=$(dirname $0)
+DRIVER_PATH=$(dirname "$0")
 
-. ${DRIVER_PATH}/../../datastore/eternus/scripts_eternus.sh
+. "${DRIVER_PATH}"/../../datastore/eternus/scripts_eternus.sh
 
 #-------------------------------------------------------------------------------
 # Return if moving a disk, we will move them when moving the whole system_ds
 # directory for the VM
 #-------------------------------------------------------------------------------
 
-SRC_PATH=`arg_path $SRC`
-DST_PATH=`arg_path $DST`
+SRC_PATH=$( arg_path "$SRC" )
+DST_PATH=$( arg_path "$DST" )
 
-SRC_HOST=`arg_host $SRC`
-DST_HOST=`arg_host $DST`
+SRC_HOST=$( arg_host "$SRC" )
+DST_HOST=$( arg_host "$DST" )
 
-DST_DIR=`dirname $DST_PATH`
+DST_DIR=$( dirname "$DST_PATH" )
 
-if [ `is_disk $SRC_PATH` -eq 0 ]; then
+if [ "$( is_disk "$SRC_PATH" )" -eq 0 ]; then
     ssh_make_path "$DST_HOST" "$DST_DIR"
 
     log "Moving $SRC to $DST"
@@ -92,7 +92,7 @@ ARRAY_MGMT_IP="${XPATH_ELEMENTS[1]}"
 ARRAY_POOL_NAME="${XPATH_ELEMENTS[2]}"
 
 
-DRV_TASK=mv
+DRV_TASK="mv"
 if [[ $DEBUG = "YES" ]]; then
     echo "${*}" > /var/tmp/one/eternus-"${DRV_TASK}".params
     exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
@@ -128,7 +128,7 @@ if [ -z "$PERSISTENT" ]; then
     IQN=$IQN-snapshot-$VMID
 fi
 
-VVOL_NAME=$( echo $IQN|$AWK -F. '{print $(NF)}' )
+VVOL_NAME=$( echo "$IQN"|$AWK -F. '{print $(NF)}' )
 
 #-------------------------------------------------------------------------------
 # Start actions
@@ -170,7 +170,7 @@ fi
 if is_iscsi "$DST_HOST"; then
     log "Mapping $DST_HOST:$VVOL_NAME"
 
-    VVOL_UID=$( eternus_get_vvol_uid ${VVOL_NAME} ${ARRAY_MGMT_IP} )
+    VVOL_UID=$( eternus_get_vvol_uid "${VVOL_NAME}" "${ARRAY_MGMT_IP}" )
 
     DEV="/dev/mapper/3${VVOL_UID}"
     eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME"
