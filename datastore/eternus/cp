@@ -32,8 +32,8 @@ else
     LIB_LOCATION=$ONE_LOCATION/lib
 fi
 
-DRV_PATH=$(dirname  $0)
-DRV_TASK=$(basename $0)
+DRV_PATH=$(dirname "$0")
+DRV_TASK=$(basename "$0")
 UTILS_PATH="${DRV_PATH}/.."
 
  
