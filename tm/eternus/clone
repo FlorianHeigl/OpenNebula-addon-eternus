@@ -48,11 +48,11 @@ else
     TMCOMMON=$ONE_LOCATION/var/remotes/tm/tm_common.sh
 fi
 
-. $TMCOMMON
+. "$TMCOMMON"
 
-DRV_PATH=$(dirname $0)
+DRV_PATH=$(dirname "$0")
 
-. ${DRV_PATH}/../../datastore/eternus/scripts_eternus.sh
+. "${DRV_PATH}"/../../datastore/eternus/scripts_eternus.sh
 
 # -------- Get clone and datastore arguments from OpenNebula core ------------
 
@@ -65,14 +65,14 @@ DSID=$4
 SRC_VVOL_NAME=${SRC%:*}
 SRC_VVOL_UID=${SRC#*:}
 
-DST_PATH=`arg_path $DST`
-DST_HOST=`arg_host $DST`
-DST_DIR=`dirname $DST_PATH`
+DST_PATH=$( arg_path "$DST" )
+DST_HOST=$( arg_host "$DST" )
+DST_DIR=$(dirname "$DST_PATH" )
 
 #get_xpath_info
 
 #XPATH="${DRV_PATH}/../../datastore/xpath.rb --stdin"
-XPATH="$(dirname $0)/../../datastore/xpath.rb --stdin"
+XPATH="$(dirname "$0")/../../datastore/xpath.rb --stdin"
 
 
 
@@ -80,13 +80,13 @@ XPATH="$(dirname $0)/../../datastore/xpath.rb --stdin"
 # Get Image information
 #-------------------------------------------------------------------------------
 
-DISK_ID=$(basename ${DST_PATH} | cut -d. -f2)
+DISK_ID=$(basename "${DST_PATH}" | cut -d. -f2)
 
 unset i j XPATH_ELEMENTS
 
 while IFS= read -r -d '' element; do
     XPATH_ELEMENTS[i++]="$element"
-done < <(onevm show -x $VMID| $XPATH \
+done < <(onevm show -x "$VMID" | $XPATH \
                     /VM/NAME \
                     /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/SIZE \
                     /VM/TEMPLATE/DISK[DISK_ID=$DISK_ID]/ORIGINAL_SIZE \
@@ -170,7 +170,7 @@ EOF
 
 
 # then we need to create the base path
-ssh_make_path $DST_HOST $DST_DIR
+ssh_make_path "$DST_HOST" "$DST_DIR"
 
 # attach the source lun
 ssh_exec_and_log "$DST_HOST" "$ATTACH_SOURCE" \
