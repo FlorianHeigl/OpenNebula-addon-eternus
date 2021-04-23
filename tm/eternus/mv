@@ -55,7 +55,7 @@ DST_HOST=`arg_host $DST`
 DST_DIR=`dirname $DST_PATH`
 
 if [ `is_disk $SRC_PATH` -eq 0 ]; then
-    ssh_make_path $DST_HOST $DST_DIR
+    ssh_make_path "$DST_HOST" "$DST_DIR"
 
     log "Moving $SRC to $DST"
 
@@ -82,7 +82,7 @@ unset i XPATH_ELEMENTS
 
 while IFS= read -r -d '' element; do
     XPATH_ELEMENTS[i++]="$element"
-done < <(onedatastore show -x $DSID| $XPATH \
+done < <(onedatastore show -x "$DSID"| $XPATH \
                     /DATASTORE/TEMPLATE/DEBUG \
                     /DATASTORE/TEMPLATE/ARRAY_MGMT_IP \
                     /DATASTORE/TEMPLATE/ARRAY_POOL_NAME)
@@ -128,7 +128,7 @@ if [ -z "$PERSISTENT" ]; then
     IQN=$IQN-snapshot-$VMID
 fi
 
-VVOL_NAME=`echo $IQN|$AWK -F. '{print $(NF)}'`
+VVOL_NAME=$( echo $IQN|$AWK -F. '{print $(NF)}' )
 
 #-------------------------------------------------------------------------------
 # Start actions
@@ -170,7 +170,7 @@ fi
 if is_iscsi "$DST_HOST"; then
     log "Mapping $DST_HOST:$VVOL_NAME"
 
-    VVOL_UID=`eternus_get_vvol_uid ${VVOL_NAME} ${ARRAY_MGMT_IP}`
+    VVOL_UID=$( eternus_get_vvol_uid ${VVOL_NAME} ${ARRAY_MGMT_IP} )
 
     DEV="/dev/mapper/3${VVOL_UID}"
     eternus_map "$ARRAY_MGMT_IP" "$DST_HOST" "$VVOL_NAME"
