@@ -22,7 +22,8 @@ http://docs.ts.fujitsu.com/dl.aspx?id=d50e9f72-a69d-4602-9140-321f91e0f31d
 
 ### thin pool usage
 
-```CLI> show thin-pro-pools
+```
+CLI> show thin-pro-pools
 Thin Pro             Disk         RAID     Status             Total       Provisioned         Used        Used      Warn-  Atten-  Encryp- Chunk
 No. Name             Attribute    Level                       Capacity    Capacity    Rate(%) Capacity    Status    ing(%) tion(%) tion    Size(MB)
 --- ---------------- ------------ -------- ------------------ ----------- ----------- ------- ----------- --------- ------ ------- ------- --------
