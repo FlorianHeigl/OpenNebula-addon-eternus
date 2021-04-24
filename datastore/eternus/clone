@@ -31,7 +31,7 @@ DRV_TASK=$(basename "$0")
 
 # source opennebula tools and eternus scripts
 for lib in ${LIB_LOCATION}/sh/scripts_common.sh ${DRV_PATH}/../libfs.sh ${DRV_PATH}/scripts_eternus.sh; do
-    bash -eun "$lib" && source "$lib" || { echo "Error: failed to set up driver"; exit 1; }
+    (bash -eun "$lib" && source "$lib") || { echo "Error: failed to set up driver"; exit 1; }
 done
 
 # parse XML Data from DRV_ACTION

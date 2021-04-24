@@ -32,15 +32,15 @@ else
     LIB_LOCATION=$ONE_LOCATION/lib
 fi
 
-DRV_PATH=$(dirname  $0)
-DRV_TASK=$(basename $0)
+DRV_PATH=$(dirname "$0")
+DRV_TASK=$(basename "$0")
 UTILS_PATH="${DRV_PATH}/.."
 
  
 
 # source opennebula tools and eternus scripts
 for lib in ${LIB_LOCATION}/sh/scripts_common.sh ${DRV_PATH}/../libfs.sh ${DRV_PATH}/scripts_eternus.sh; do
-    bash -eun "$lib" && source "$lib" || { echo "Error: failed to set up driver"; exit 1; }
+    (bash -eun "$lib" && source "$lib") || { echo "Error: failed to set up driver"; exit 1; }
 done
 
 # parse XML Data from DRV_ACTION
@@ -59,7 +59,7 @@ DST_HOST=$( get_destination_host "$ID" )
 
 set_up_datastore "$BASE_PATH" "$RESTRICTED_DIRS" "$SAFE_DIRS" "$UMASK"
 
-IMAGE_HASH=`generate_image_hash`
+IMAGE_HASH=$( generate_image_hash )
 TMP_DST="$STAGING_DIR/$IMAGE_HASH"
 
 
@@ -81,6 +81,8 @@ VVOL_UID=$( eternus_get_vvol_uid "$VVOL_NAME" "$ARRAY_MGMT_IP" )
 MAP_NAME="3${VVOL_UID}"
 DEV="/dev/mapper/${MAP_NAME}"
 
+# shellcheck disable=SC2153
+# IMAGE_PATH kommt aus env?
 DOWNLOADER_ARGS=$( set_downloader_args "$MD5" "$SHA1" "$NO_DECOMPRESS" "$LIMIT_TRANSFER_BW" "$IMAGE_PATH" - )
 
 COPY_COMMAND="$UTILS_PATH/downloader.sh $DOWNLOADER_ARGS"
@@ -93,7 +95,7 @@ http://*|https://*)
     ;;
 
 *)
-    if [ `check_restricted $IMAGE_PATH` -eq 1 ]; then
+    if [ "$( check_restricted "$IMAGE_PATH" )" -eq 1 ]; then
         log_error "Not allowed to copy images from $RESTRICTED_DIRS"
         error_message "Not allowed to copy image file $IMAGE_PATH"
         exit 1
