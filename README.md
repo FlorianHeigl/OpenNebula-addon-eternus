@@ -29,16 +29,16 @@ This addon is intended for OpenNebula 5.x+
 
 ## Requirements
 
-TBA
+The Eternus requires a *working*, *reliable* multipath setup.
 
-The Eternus requires a working, reliable multipath setup.
-Look out timeouts (no mpath)
+Look out for timeouts
 ```
 [6012868.647650]  connection1:0: detected conn error (1020)
 
-```
+``` 
+These indicated a missing mpath/alua issue, array wants to serve this LUN over a port that you have a working session with.
 
-or incorrect setup
+another message indicating an incorrect setup:
 ```
 [7316736.333286] sd 11:0:0:0: Warning! Received an indication that the LUN assignments on this target have changed. The Linux SCSI layer does not automatical
 ```
@@ -50,7 +50,12 @@ Sharing of volumes (i.e. for a HA cluster) does not match well with the
 OpenNebula use case.
 Such storage should be directly attached (i.e. also using iSCSI) to the virtual machines and not managed by OpenNebula.
 
-The Eternus has severely limited snapshot support geared mostly towards off-site replication and proprietary features as used i.e. by VEEAM(r). As such, snapshots of running VMs cannot be created.
+The Eternus has severely limited snapshot support geared mostly towards off-site replication and proprietary features as used i.e. by VEEAM(r). As such, live snapshots of running VMs *cannot be created*.
+This takes away some use cases you might wish for. Some others can be solved using clones, which *can be created*.
+
+The secondary controller of the Eternus is not able to run management tasks.
+Currently only the primary controller can be used.
+
 
 ## Installation
 
@@ -58,7 +63,7 @@ The Eternus has severely limited snapshot support geared mostly towards off-site
 ### Install the driver
 
 *Deploy* the files to `/var/lib/one/remotes/(datastore|tm)`.
-A install.sh is provided (you might need to update the source path in it)
+A `install.sh` is provided (you might need to update the source path in it)
 
 Make *modifications* to `/etc/one/oned.conf`:
 
@@ -108,6 +113,7 @@ Restart the OpenNebula core to load the new drivers.
 Check the log files.
 
 PSA: It's worth knowing that if you have some mistake / unsupported setting in `oned.conf` that might show only later when you try to change one of the attributes. For that reason, it's best to try adding some attribute as a test.
+That means, when you create the datastore, go to Storage/Datastores and create an attribute called "TEST" while looking at oned.log.
 
 
 ### Create the *datastore definition*
@@ -119,7 +125,7 @@ oneadmin@one-frontend:~$ onedatastore show 120
 DATASTORE 120 INFORMATION                                                       
 ID             : 120
 NAME           : ETERNUS-1
-USER           : deepthink
+USER           : your-gui-user
 GROUP          : oneadmin
 CLUSTERS       : 0
 TYPE           : IMAGE
@@ -162,6 +168,18 @@ TM_MAD_SYSTEM="ssh"
 TYPE="IMAGE_DS"
 ```
 
+To create that yourself, you need to make a text file (i.e. my-eternus-2.txt).
+It should contain `NAME=MYDATASTORE` followed by everything after `DATASTORE TEMPLATE`
+
+Then create the datastore from that file:
+
+```
+$ onedatastore create my-eternus-2.txt
+```
+It'll print the ID of the new datastore and start monitoring it.
+Until the ssh access works flawless, it'll probably show the datastore at 1MB size, or other weird things might happen.
+This is due to how the OpenNebula monitoring works. It seems that states like `ERROR` will not appear for datastores at all.
+
 
 ### ssh access to Eternus
 
@@ -173,7 +191,7 @@ Host 192.168.12.34
   IdentityFile /var/lib/one/.ssh/id_rsa-eternus
   Ciphers aes128-cbc
   RequestTTY force
-  User deepthink
+  User my-storage-user
 ```
 
 We recommend using a dedicated key like in the above example.
@@ -181,6 +199,9 @@ We recommend using a dedicated key like in the above example.
 The Public key has to be converted to "ietf" format and uploaded to the eternus.
 If it is accepted by the Eternus it'll show in the list of deployed keys.
 If it doesn't like it, it'll be like you didn't upload a key at all.
+
+* If you want, you can also use `ssh-keyscan 192.168.12.34` to scan the ssh-keys or store them in DNS as `SSHFP` records. 
+* The second controller will show a different ssh key
 
 
 ## Usage

@@ -10,11 +10,12 @@ http://docs.ts.fujitsu.com/dl.aspx?id=d50e9f72-a69d-4602-9140-321f91e0f31d
 
 ## Running commands
 
-* create a user with correct privileges in the storage
-* generate a ssh key for the management user `ssh-keygen -t rsa -b 4096 -f id_rsa-eternus-demo`. (Likely you need a key with no passphrase for OpenNebula <= 5.12)
+* create a user with correct privileges (`Storage Admin`) in the storage
+* generate a ssh key for the management user: `ssh-keygen -t rsa -b 4096 -f id_rsa-eternus-demo`. (Likely you need a key with no passphrase for OpenNebula <= 5.12)
 * convert the key to 'ietf' format `ssh-keygen -e -f id_rsa-eternus-demo.pub > id_rsa-coda-eternus.pub.ietf`
 * Install the key on the eternus
 * run the commands using `ssh -t user@storage "command"` for pseudo tty allocation
+* For automation, deploy these settings to `~/.ssh/config`
 
 
 ## Volume and initiator Management
