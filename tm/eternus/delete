@@ -54,9 +54,25 @@ DSID=$3
 DST_PATH=$( arg_path "$DST" )
 DST_HOST=$( arg_host "$DST" )
 
-#FIXME: this is hardcoded for today
-ARRAY_POOL_NAME=POOL-NAME
-ARRAY_MGMT_IP=192.168.12.34
+#-------------------------------------------------------------------------------
+# Get DS information
+#-------------------------------------------------------------------------------
+
+XPATH="${DRIVER_PATH}/../../datastore/xpath.rb --stdin"
+
+unset i XPATH_ELEMENTS
+
+while IFS= read -r -d '' element; do
+    XPATH_ELEMENTS[i++]="$element"
+done < <(onedatastore show -x "$DSID"| $XPATH \
+                    /DATASTORE/TEMPLATE/DEBUG \
+                    /DATASTORE/TEMPLATE/ARRAY_MGMT_IP \
+                    /DATASTORE/TEMPLATE/ARRAY_POOL_NAME)
+
+DEBUG="${XPATH_ELEMENTS[0]:-NO}"
+ARRAY_MGMT_IP="${XPATH_ELEMENTS[1]}"
+ARRAY_POOL_NAME="${XPATH_ELEMENTS[2]}"
+
 
 #-------------------------------------------------------------------------------
 # Return if deleting a disk, we will delete them when removing the
