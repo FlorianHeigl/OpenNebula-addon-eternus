@@ -19,6 +19,8 @@
 DRV_ACTION="${1}"
 ID="${2}"
 
+DSID="${2}"
+
 if [ -z "${ONE_LOCATION}" ]; then
     LIB_LOCATION=/usr/lib/one
 else

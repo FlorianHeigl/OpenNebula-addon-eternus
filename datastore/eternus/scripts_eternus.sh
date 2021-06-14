@@ -27,13 +27,22 @@
 CONNECT_TIMEOUT=15
 
 # flock timeout for eternus_lock function
-FLOCK_TIMEOUT=600
+FLOCK_TIMEOUT=60
 
+# TODO: Lock per ARRAY, DATASTORE NAME, DSID or per MGMT_IP?
+# The info is possibly not already known at this point
+# all driver scripts should bail if DSID was not passed to them in some fashion - or any other arg.
 # flock lockfile for eternus_lock function
-FLOCK_LOCKFILE="/var/lock/one/.eternus.lock"
+# "${DSID:-}"
+#FLOCK_LOCKFILE="/var/lock/one/.eternus.lock"
+FLOCK_LOCKFILE="/var/lock/one/.eternus-${DSID}.lock"
 
+# TODO: Change FD per Lock, using DSID
+# DSID is known, it is passed to all driver scripts as an argument (varying position, dsid or id)
+# fall back to another id, do not use the same as v7000 driver(!)
 # flock file descriptor for eternus_lock function
-FLOCK_FD=204
+#FLOCK_FD=222
+FLOCK_FD="${DSID:-222}"
 
 # Use ddpt instead of dd to speed up data transferts using sparse copy
 USE_DDPT=1
