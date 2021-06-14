@@ -98,6 +98,18 @@ ORIGINAL_SIZE="${XPATH_ELEMENTS[j++]}"
 SYS_DSID="${XPATH_ELEMENTS[j++]}"
 
 
+while IFS= read -r -d '' element; do
+    XPATH_ELEMENTS[i++]="$element"
+done < <(onedatastore show -x "$DSID"| $XPATH \
+                    /DATASTORE/TEMPLATE/DEBUG \
+                    /DATASTORE/TEMPLATE/ARRAY_MGMT_IP \
+                    /DATASTORE/TEMPLATE/ARRAY_POOL_NAME)
+
+DEBUG="${XPATH_ELEMENTS[0]:-NO}"
+ARRAY_MGMT_IP="${XPATH_ELEMENTS[1]}"
+ARRAY_POOL_NAME="${XPATH_ELEMENTS[2]}"
+
+
 DRV_TASK=tm-clone
 DEBUG=YES
 if [[ $DEBUG = "YES" ]]; then
@@ -105,9 +117,6 @@ if [[ $DEBUG = "YES" ]]; then
     echo "$DRV_ACTION" > /var/tmp/one/eternus-"${DRV_TASK}".params
     exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
 fi
-#FIXME: this is hardcoded for today
-ARRAY_POOL_NAME=POOL-NAME
-ARRAY_MGMT_IP=192.168.12.34
 
 #-------------------------------------------------------------------------------
 # Start actions
