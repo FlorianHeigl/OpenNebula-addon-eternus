@@ -41,7 +41,7 @@ fi
 
 DRIVER_PATH=$(dirname "$0")
 
-source "${DRIVER_PATH}"/../../etc/datastore/eternus/eternus.conf
+#source "${DRIVER_PATH}"/../../etc/datastore/eternus/scripts_eternus.conf
 . "${DRIVER_PATH}"/../../datastore/eternus/scripts_eternus.sh
 
 # -------- Get delete and datastore arguments from OpenNebula core ------------
