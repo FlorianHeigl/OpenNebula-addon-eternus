@@ -292,7 +292,7 @@ function multipath_flush {
 
 # TEST
 function multipath_rescan {
-    echo "sudo multipath"
+    echo "multipath"
     sleep 4
 }
 

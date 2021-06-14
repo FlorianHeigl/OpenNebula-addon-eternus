@@ -31,7 +31,7 @@ DRV_TASK=$(basename "$0")
 
 # source opennebula tools and eternus scripts
 for lib in ${LIB_LOCATION}/sh/scripts_common.sh ${DRV_PATH}/../libfs.sh ${DRV_PATH}/scripts_eternus.sh; do
-    (bash -eun "$lib" && source "$lib") || { echo "Error: failed to set up driver"; exit 1; }
+    bash -eun "$lib" && source "$lib" || { echo "Error: failed to set up driver"; exit 1; }
 done
 
 # parse XML Data from DRV_ACTION
@@ -89,8 +89,16 @@ CLONE_CMD=$(cat <<EOF
         fi
         # Exit with error if mappings do not exist
         if [ ! -e "$SRC_DEV" ] || [ ! -e "$DEV" ]; then
+            echo "one disk was not successfully mapped"
             exit 1
         fi
+EOF
+)
+
+ssh_exec_and_log "$DST_HOST" "$CLONE_CMD" \
+ "Error registering $DST_HOST:${VVOL_UID} - lun mapping"
+
+DM_CHECK_AND_CLONE_AND_UNMAP=$(cat <<EOF
 
         SRC_DM_HOLDER=dm-\$($SUDO dmsetup info -c --noheadings "$SRC_DEV" | awk -F: '{print \$3}')
         DM_HOLDER=dm-\$($SUDO dmsetup info -c --noheadings "$DEV" | awk -F: '{print \$3}')
@@ -128,8 +136,8 @@ CLONE_CMD=$(cat <<EOF
 EOF
 )
 
-ssh_exec_and_log "$DST_HOST" "$CLONE_CMD" \
- "Error registering $DST_HOST:${VVOL_UID}"
+ssh_exec_and_log "$DST_HOST" "$DM_CHECK_AND_CLONE_AND_UNMAP" \
+ "Error registering $DST_HOST:${VVOL_UID} - multipath setup or clone"
 
 
 #PHASE: POST

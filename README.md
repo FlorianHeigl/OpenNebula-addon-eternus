@@ -60,6 +60,21 @@ Currently only the primary controller can be used.
 ## Installation
 
 
+### extend your sudoers configuration
+
+OpenNebula already created `/etc/sudoers.d/opennebula`.
+
+You'll need to add a few command aliasses:
+
+```
+Cmnd_Alias ONE_EXTSTOR = /sbin/multipath, /bin/dd, /usr/bin/ddpt, /sbin/blockdev, /usr/bin/tee, /sbin/dmsetup, /usr/bin/rescan-scsi-bus.sh
+
+oneadmin ALL=(ALL) NOPASSWD: ONE_MISC, ONE_NET, ONE_LVM, ONE_ISCSI, ONE_OVS, ONE_XEN, ONE_CEPH, ONE_MARKET, ONE_HA, ONE_EXTSTOR
+```
+
+Using `tee` is based on existing ONE community code. It has  a certain security risk 
+
+
 ### Install the driver
 
 *Deploy* the files to `/var/lib/one/remotes/(datastore|tm)`.
