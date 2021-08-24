@@ -48,8 +48,8 @@ done
 get_xpath_info
 
 if [[ $DEBUG = "YES" ]]; then
-    echo "$DRV_ACTION" > /var/tmp/one/eternus-"${DRV_TASK}".params
-    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
+    echo "$DRV_ACTION" > /var/tmp/one/eternus-"${DRV_TASK}"-"${ID}".params
+    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}-${ID}.log")
 fi
 
 #PHASE: PREP

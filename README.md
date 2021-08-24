@@ -31,6 +31,11 @@ This addon is intended for OpenNebula 5.x+
 
 The Eternus requires a *working*, *reliable* multipath setup.
 
+For Ubuntu 18.04 install the following packeges on all Nodes:
+```
+apt install open-iscsi multipath-tools
+```
+
 Look out for timeouts
 ```
 [6012868.647650]  connection1:0: detected conn error (1020)
@@ -235,7 +240,8 @@ For individual VMs, if you have multiple system datastores, you should stick wit
 All driver components support generating debug output.
 The log files
 Logging is enabled by setting the attribute `DEBUG=yes` on the datastore.
-The directory `/var/tmp/one` needs to exist and be writeable to the oneadmin user on the frontend. The drivers log to `/var/tmp/one/<action>.log` and show their calling parameters as `/var/tmp/one/<action>.params`.
+The directory `/var/tmp/one` needs to exist and be writeable to the oneadmin user on the frontend. 
+The drivers log to `/var/tmp/one/<action>-<disk-id/vm-id>.log` and show their calling parameters as `/var/tmp/one/<action>-<disk-id/vm-id>.params`.
 The logs are overwritten on each call.
 
 

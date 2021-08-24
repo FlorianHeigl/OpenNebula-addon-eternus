@@ -54,7 +54,7 @@ unset i XPATH_ELEMENTS
 
 while IFS= read -r -d '' element; do
     XPATH_ELEMENTS[i++]="$element"
-done < <(onedatastore show -x "$DSID"| "$XPATH" \
+done < <(onedatastore show -x $DSID| $XPATH \
                     /DATASTORE/BASE_PATH \
                     /DATASTORE/TEMPLATE/RESTRICTED_DIRS \
                     /DATASTORE/TEMPLATE/SAFE_DIRS \
@@ -75,8 +75,8 @@ ARRAY_POOL_NAME="${XPATH_ELEMENTS[7]}"
 
 
 if [[ $DEBUG = "YES" ]]; then
-    echo "${*}" > /var/tmp/one/eternus-"${DRV_TASK}".params
-    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
+    echo "${*}" > /var/tmp/one/eternus-"${DRV_TASK}"-"${VMID}".params
+    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}-${VMID}.log")
     echo "SRC:$1
     DST:$2
     VMID:$3
