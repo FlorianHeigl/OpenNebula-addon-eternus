@@ -116,8 +116,8 @@ DRV_TASK=tm-clone
 DEBUG=YES
 if [[ $DEBUG = "YES" ]]; then
     #set -x
-    echo "${*}" > /var/tmp/one/eternus-"${DRV_TASK}".params
-    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
+    echo "${*}" > /var/tmp/one/eternus-"${DRV_TASK}"-"${VMID}".params
+    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}-${VMID}.log")
 fi
 
 #-------------------------------------------------------------------------------

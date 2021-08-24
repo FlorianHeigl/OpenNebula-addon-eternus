@@ -296,7 +296,7 @@ function iscsiadm_session_rescan {
 function multipath_flush {
     local MAP_NAME
     MAP_NAME="$1"
-    echo "sudo multipath -f $MAP_NAME"
+    echo "multipath -f $MAP_NAME"
 }
 
 # TEST
@@ -361,7 +361,7 @@ function discover_lun {
         sleep 2
         $(rescan_scsi_bus "$LUN")
         sleep 2
-        $(multipath_rescan)
+        sudo $(multipath_rescan)
 
         DEV="/dev/mapper/3$WWN"
 
@@ -373,7 +373,7 @@ function discover_lun {
         done
         if [ ! -e \$DEV ]; then
             # Last chance to get our mapping
-            $(multipath_rescan)
+            sudo $(multipath_rescan)
             COUNTER=1
             while [ ! -e "\$DEV" ] && [ \$COUNTER -le 10 ]; do
                 sleep 1
@@ -415,7 +415,7 @@ function remove_lun {
       DM_HOLDER=\$($SUDO dmsetup ls -o blkdevname | grep -Po "(?<=3$WWN\s\()[^)]+")
       DM_SLAVE=\$(ls /sys/block/\${DM_HOLDER}/slaves)
 
-      $(multipath_flush "\$DEV")
+      sudo $(multipath_flush "\$DEV")
 
       unset device
       for device in \${DM_SLAVE}

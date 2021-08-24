@@ -94,8 +94,8 @@ ARRAY_POOL_NAME="${XPATH_ELEMENTS[2]}"
 
 DRV_TASK="mv"
 if [[ $DEBUG = "YES" ]]; then
-    echo "${*}" > /var/tmp/one/eternus-"${DRV_TASK}".params
-    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
+    echo "${*}" > /var/tmp/one/eternus-"${DRV_TASK}"-"${VMID}".params
+    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}-${VMID}.log")
     echo "SRC=$1
 DST=$2
 VMID=$3

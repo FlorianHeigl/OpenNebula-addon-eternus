@@ -83,8 +83,8 @@ DRV_TASK=tm-delete
 DEBUG=YES
 if [[ $DEBUG = "YES" ]]; then
     #set -x
-    echo "$DRV_ACTION" > /var/tmp/one/eternus-"${DRV_TASK}".params
-    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}.log")
+    echo "$DRV_ACTION" > /var/tmp/one/eternus-"${DRV_TASK}"-"${VMID}".params
+    exec &> >(tee /var/tmp/one/eternus-"${DRV_TASK}-${VMID}.log")
     echo "DST=$1
 VMID=$2
 DSID=$3"
